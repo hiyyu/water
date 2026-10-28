@@ -5,3 +5,7 @@ scikit-learn
 matplotlib
 seaborn
 jupyter
+streamlit
+pandas
+numpy
+plotly
