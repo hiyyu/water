@@ -1,0 +1,24 @@
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+
+# Local datasets (may contain restricted DOE data)
+data/
+*.xlsx
+*.xls
+*.csv
+
+# Generated outputs
+outputs/
+
+# Environment variables and secrets
+.env
+.env.*
+
+# IDE and operating-system files
+.vscode/
+.DS_Store
+Thumbs.db
