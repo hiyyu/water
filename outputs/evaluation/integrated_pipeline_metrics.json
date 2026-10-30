@@ -1,0 +1,149 @@
+{
+    "experiment": "CEEMDAN-LSTM + XGBoost integrated evaluation",
+    "data_source": "C:\\Users\\pc\\Documents\\WaterQuality\\water\\outputs\\combined_doe_dataset.csv",
+    "ceemdan_lstm_predictions_source": "C:\\Users\\pc\\Documents\\WaterQuality\\water\\outputs\\evaluation\\ceemdan_lstm_walk_forward_predictions.csv",
+    "split_method": "Chronological split by target date",
+    "training_date_cutoff": "2024-09-17",
+    "training_rows": 61,
+    "testing_rows": 27,
+    "test_period_start": "2024-09-17",
+    "test_period_end": "2024-12-10",
+    "wqi_forecasting_metrics_on_integrated_test_rows": {
+        "n_predictions": 27,
+        "MAE": 5.6418318571867765,
+        "RMSE": 7.908980775901723,
+        "R2": 0.69150571541645
+    },
+    "risk_classification": {
+        "persistence_baseline": {
+            "n_predictions": 27,
+            "accuracy": 0.6296296296296297,
+            "balanced_accuracy": 0.6866096866096866,
+            "macro_f1": 0.6495726495726496,
+            "class_report": {
+                "Clean": {
+                    "precision": 0.7142857142857143,
+                    "recall": 1.0,
+                    "f1-score": 0.8333333333333334,
+                    "support": 5.0
+                },
+                "Polluted": {
+                    "precision": 0.5714285714285714,
+                    "recall": 0.4444444444444444,
+                    "f1-score": 0.5,
+                    "support": 9.0
+                },
+                "Slightly Polluted": {
+                    "precision": 0.6153846153846154,
+                    "recall": 0.6153846153846154,
+                    "f1-score": 0.6153846153846154,
+                    "support": 13.0
+                },
+                "accuracy": 0.6296296296296297,
+                "macro avg": {
+                    "precision": 0.6336996336996337,
+                    "recall": 0.6866096866096866,
+                    "f1-score": 0.6495726495726496,
+                    "support": 27.0
+                },
+                "weighted avg": {
+                    "precision": 0.6190476190476191,
+                    "recall": 0.6296296296296297,
+                    "f1-score": 0.617283950617284,
+                    "support": 27.0
+                }
+            }
+        },
+        "xgboost_history_only": {
+            "n_predictions": 27,
+            "accuracy": 0.48148148148148145,
+            "balanced_accuracy": 0.5612535612535613,
+            "macro_f1": 0.47863247863247865,
+            "class_report": {
+                "Clean": {
+                    "precision": 0.5,
+                    "recall": 1.0,
+                    "f1-score": 0.6666666666666666,
+                    "support": 5.0
+                },
+                "Polluted": {
+                    "precision": 0.5,
+                    "recall": 0.2222222222222222,
+                    "f1-score": 0.3076923076923077,
+                    "support": 9.0
+                },
+                "Slightly Polluted": {
+                    "precision": 0.46153846153846156,
+                    "recall": 0.46153846153846156,
+                    "f1-score": 0.46153846153846156,
+                    "support": 13.0
+                },
+                "accuracy": 0.48148148148148145,
+                "macro avg": {
+                    "precision": 0.4871794871794872,
+                    "recall": 0.5612535612535613,
+                    "f1-score": 0.47863247863247865,
+                    "support": 27.0
+                },
+                "weighted avg": {
+                    "precision": 0.48148148148148145,
+                    "recall": 0.48148148148148145,
+                    "f1-score": 0.4482431149097816,
+                    "support": 27.0
+                }
+            }
+        },
+        "xgboost_history_plus_predicted_wqi": {
+            "n_predictions": 27,
+            "accuracy": 0.4444444444444444,
+            "balanced_accuracy": 0.5356125356125356,
+            "macro_f1": 0.4507936507936508,
+            "class_report": {
+                "Clean": {
+                    "precision": 0.5,
+                    "recall": 1.0,
+                    "f1-score": 0.6666666666666666,
+                    "support": 5.0
+                },
+                "Polluted": {
+                    "precision": 0.4,
+                    "recall": 0.2222222222222222,
+                    "f1-score": 0.2857142857142857,
+                    "support": 9.0
+                },
+                "Slightly Polluted": {
+                    "precision": 0.4166666666666667,
+                    "recall": 0.38461538461538464,
+                    "f1-score": 0.4,
+                    "support": 13.0
+                },
+                "accuracy": 0.4444444444444444,
+                "macro avg": {
+                    "precision": 0.4388888888888889,
+                    "recall": 0.5356125356125356,
+                    "f1-score": 0.4507936507936508,
+                    "support": 27.0
+                },
+                "weighted avg": {
+                    "precision": 0.42654320987654315,
+                    "recall": 0.4444444444444444,
+                    "f1-score": 0.4112874779541446,
+                    "support": 27.0
+                }
+            }
+        }
+    },
+    "files": {
+        "predictions": "C:\\Users\\pc\\Documents\\WaterQuality\\water\\outputs\\evaluation\\integrated_pipeline_predictions.csv",
+        "confusion_matrix": "C:\\Users\\pc\\Documents\\WaterQuality\\water\\outputs\\evaluation\\integrated_pipeline_confusion_matrix.csv",
+        "classification_report": "C:\\Users\\pc\\Documents\\WaterQuality\\water\\outputs\\evaluation\\integrated_pipeline_classification_report.txt"
+    },
+    "limitations": [
+        "Only dates with available CEEMDAN-LSTM walk-forward forecasts are evaluated.",
+        "The integrated test set is small and contains only later target dates.",
+        "A class absent from training cannot be learned by XGBoost.",
+        "Results depend on the current 2023-2024 DOE dataset.",
+        "The status labels reflect the supplied dataset's categories; they are not a separate independently measured contamination-risk score.",
+        "More DOE data and repeated chronological validation are needed before drawing final conclusions."
+    ]
+}

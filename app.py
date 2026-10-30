@@ -1,460 +1,1015 @@
-"""Water Quality FYP dashboard — two tabs, backed by saved model outputs.
-Run: python -m streamlit run app.py
 """
+Water Quality Prediction and Contamination Risk Dashboard
+Malaysian Department of Environment (DOE) River Monitoring System
+Supports: Persistence | CEEMDAN | LSTM | CEEMDAN-LSTM | XGBoost | CEEMDAN-LSTM-XGBoost
+"""
+
+from datetime import datetime, date
 from pathlib import Path
-import json
-import re
+import sys
+
+# Ensure src is on Python module search path
+sys.path.insert(0, str(Path(__file__).resolve().parent / "src"))
+
+import numpy as np
 import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
+from plotly.subplots import make_subplots
 import streamlit as st
 
-ROOT = Path(__file__).resolve().parent
-DASH = ROOT / 'outputs' / 'dashboard'
-EVAL = ROOT / 'outputs' / 'evaluation'
-STATUS_COLORS = {'Clean': '#2788e8', 'Slightly Polluted': '#e9b700', 'Polluted': '#ee5050'}
+import overview_ui as ui
+from forecast_views import (
+    MODEL_COLORS, MAP_FOCUS, daily_figure, period_figure, map_figure, state_summary, river_summary,
+)
+from model_engine import (
+    ENGINE,
+    STATUS_CLEAN,
+    STATUS_SLIGHTLY_POLLUTED,
+    STATUS_POLLUTED,
+    COLOR_CLEAN,
+    COLOR_SLIGHTLY_POLLUTED,
+    COLOR_POLLUTED,
+    MODEL_DESCRIPTIONS,
+    classify_wqi,
+    get_doe_class,
+    get_class_color,
+    calculate_doe_wqi,
+)
 
-st.set_page_config(page_title='Water Quality Prediction', page_icon='💧', layout='wide')
-st.markdown('''<style>
-.block-container {padding-top: 1.7rem; max-width: 1500px}
-[data-testid="stMetric"] {border:1px solid #dce6ee; padding:13px; border-radius:12px}
-h1,h2,h3 {letter-spacing:-.02em}
-</style>''', unsafe_allow_html=True)
+# ============================================================
+# PAGE CONFIGURATION
+# ============================================================
 
-@st.cache_data(show_spinner=False)
-def csv_file(path):
-    if not path.exists():
-        return pd.DataFrame()
-    df = pd.read_csv(path)
-    df.columns = df.columns.astype(str).str.replace(r'\s+', ' ', regex=True).str.strip()
-    for col in df.columns:
-        if ('date' in col.lower() or col.lower() in ['smp-dat']) and not col.lower().endswith('_id'):
-            converted = pd.to_datetime(df[col], errors='coerce')
-            if converted.notna().any():
-                df[col] = converted
-    return df
+st.set_page_config(
+    page_title="Water Quality & Contamination Risk Dashboard",
+    page_icon="💧",
+    layout="wide",
+    initial_sidebar_state="expanded",
+)
 
-def col(df, *names):
-    normalized = {re.sub(r'[^a-z0-9]', '', str(c).lower()): c for c in df.columns}
-    for name in names:
-        key = re.sub(r'[^a-z0-9]', '', name.lower())
-        if key in normalized:
-            return normalized[key]
-    return None
-
-def format_number(value, digits=2):
-    try:
-        return f'{float(value):.{digits}f}' if pd.notna(value) else '—'
-    except (ValueError, TypeError):
-        return '—'
-
-def normalize_river(value):
-    s = str(value).strip().upper()
-    if 'KLANG' in s: return 'Sungai Klang'
-    if 'SKUDAI' in s: return 'Sungai Skudai'
-    return str(value).strip()
-
-def prepare_river(df):
-    df = df.copy()
-    rc = col(df, 'river', 'sungai', 'river_name')
-    if rc: df['_river'] = df[rc].map(normalize_river)
-    return df
-
-def filter_river(df, chosen):
-    if '_river' not in df or chosen == 'Both Rivers': return df.copy()
-    return df[df['_river'] == chosen].copy()
-
-def filter_station(df, chosen):
-    sc = col(df, 'station_id', 'id stn baru', 'station', 'station_name')
-    if not sc or chosen == 'All Stations': return df.copy()
-    return df[df[sc].astype(str) == chosen].copy()
-
-def filter_dates(df, start, end):
-    dc = col(df, 'target_date', 'sample_date', 'date', 'smp-dat', 'last_sample_date')
-    if not dc or not pd.api.types.is_datetime64_any_dtype(df[dc]): return df
-    return df[df[dc].between(pd.Timestamp(start), pd.Timestamp(end))].copy()
-
-def date_options(*frames):
-    vals = []
-    for frame in frames:
-        dc = col(frame, 'target_date', 'sample_date', 'date', 'smp-dat', 'last_sample_date')
-        if dc and pd.api.types.is_datetime64_any_dtype(frame[dc]):
-            vals.extend(frame[dc].dropna().dt.date.tolist())
-    return sorted(set(vals))
-
-def model_names(df):
-    mc = col(df, 'model', 'model_name')
-    return sorted(df[mc].dropna().astype(str).unique()) if mc else []
-
-def show_table(df, label, filename):
-    st.subheader(label)
-    if df.empty:
-        st.info('No saved records match the current selection.')
-    else:
-        st.dataframe(df.drop(columns=['_river'], errors='ignore'), use_container_width=True, hide_index=True)
-        st.download_button('Download CSV', df.drop(columns=['_river'], errors='ignore').to_csv(index=False), filename, mime='text/csv', key=f'dl_{filename}')
-
-def metric_subset(df, name):
-    mc = col(df, 'model', 'model_name')
-    if not mc or not name: return df.iloc[:0]
-    return df[df[mc].astype(str).str.casefold() == str(name).casefold()]
-
-def show_metric_cards(frame):
-    if frame.empty:
-        st.caption('No matching saved evaluation metrics.')
-        return
-    row = frame.iloc[0]
-    wanted = [('MAE', 'mae'), ('RMSE', 'rmse'), ('R²', 'r2'), ('Accuracy', 'accuracy'), ('Macro F1', 'macro_f1'), ('Balanced accuracy', 'balanced_accuracy')]
-    available = [(label, col(frame, key)) for label, key in wanted]
-    available = [(label, key) for label, key in available if key and pd.notna(row[key])]
-    if not available:
-        st.dataframe(frame, use_container_width=True, hide_index=True)
-        return
-    for batch_start in range(0, len(available), 3):
-        cells = st.columns(min(3, len(available) - batch_start))
-        for cell, (label, key) in zip(cells, available[batch_start:batch_start+3]):
-            cell.metric(label, format_number(row[key], 3))
-    if len(frame) > 1:
-        with st.expander('All evaluation records for this model'):
-            st.dataframe(frame, use_container_width=True, hide_index=True)
-
-def plot_wqi_history(df, title, parameter='WQI'):
-    dc = col(df, 'sample_date', 'target_date', 'date', 'smp-dat', 'last_sample_date')
-    value_candidates = {
-        'WQI': ['wqi', 'actual_wqi', 'last_observed_wqi'],
-        'DO': ['do', 'dissolved_oxygen'],
-        'BOD': ['bod'], 'COD': ['cod'], 'NH3N': ['nh3n', 'nh3-n', 'ammoniacal_nitrogen'],
-        'SS/TSS': ['ss/tss', 'ss', 'tss', 'suspended_solids'], 'pH': ['ph']
+# Custom Styling
+st.markdown("""
+<style>
+    /* Global Styles */
+    .main-title {
+        font-size: 2.2rem;
+        font-weight: 700;
+        color: #0f172a;
+        margin-bottom: 0.2rem;
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
     }
-    vc = col(df, *value_candidates.get(parameter, ['wqi']))
-    if not dc or not vc:
-        st.info(f'Historical {parameter} observations are not available in the loaded dashboard CSVs.')
-        return
-    data = df[[dc, vc]].copy()
-    data[vc] = pd.to_numeric(data[vc], errors='coerce')
-    data = data.dropna().sort_values(dc)
-    if data.empty:
-        st.info(f'No historical {parameter} observations for this selection.')
-        return
-    # Aggregate by sampling date when multiple stations are selected.
-    data = data.groupby(dc, as_index=False)[vc].mean()
-    fig = px.line(data, x=dc, y=vc, markers=True, title=title)
-    fig.update_layout(xaxis_title='Sampling date', yaxis_title=parameter, height=320, margin=dict(t=55, b=20))
-    st.plotly_chart(fig, use_container_width=True)
-    st.caption('Historical observations; multiple stations are averaged per sampling date when applicable.')
+    .sub-title {
+        font-size: 1.05rem;
+        color: #475569;
+        margin-bottom: 1.5rem;
+    }
+    
+    /* Metric Cards */
+    .metric-card {
+        background: #ffffff;
+        border: 1px solid #e2e8f0;
+        border-radius: 12px;
+        padding: 1.2rem;
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+        transition: transform 0.2s ease, box-shadow 0.2s ease;
+    }
+    .metric-card:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+    }
+    .metric-label {
+        font-size: 0.85rem;
+        font-weight: 600;
+        text-transform: uppercase;
+        color: #64748b;
+        letter-spacing: 0.05em;
+    }
+    .metric-value {
+        font-size: 2rem;
+        font-weight: 700;
+        color: #1e293b;
+        margin-top: 0.3rem;
+    }
+    .metric-delta {
+        font-size: 0.85rem;
+        margin-top: 0.2rem;
+        font-weight: 500;
+    }
+    
+    /* Status Badges */
+    .badge-clean {
+        background-color: #dbeafe;
+        color: #1d4ed8;
+        padding: 4px 12px;
+        border-radius: 9999px;
+        font-weight: 700;
+        font-size: 0.9rem;
+        display: inline-block;
+        border: 1px solid #bfdbfe;
+    }
+    .badge-slightly-polluted {
+        background-color: #fef3c7;
+        color: #b45309;
+        padding: 4px 12px;
+        border-radius: 9999px;
+        font-weight: 700;
+        font-size: 0.9rem;
+        display: inline-block;
+        border: 1px solid #fde68a;
+    }
+    .badge-polluted {
+        background-color: #fee2e2;
+        color: #b91c1c;
+        padding: 4px 12px;
+        border-radius: 9999px;
+        font-weight: 700;
+        font-size: 0.9rem;
+        display: inline-block;
+        border: 1px solid #fecaca;
+    }
+    
+    /* Legend Banner */
+    .legend-container {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 1.5rem;
+        padding: 0.8rem 1.2rem;
+        background: #f8fafc;
+        border: 1px solid #e2e8f0;
+        border-radius: 10px;
+        align-items: center;
+        margin-top: 1rem;
+        margin-bottom: 1.5rem;
+    }
+    .legend-item {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        font-weight: 600;
+        font-size: 0.9rem;
+    }
+    .legend-dot {
+        width: 14px;
+        height: 14px;
+        border-radius: 4px;
+    }
+    
+    /* Search Info Box */
+    .info-callout {
+        background: #f0fdf4;
+        border-left: 4px solid #22c55e;
+        padding: 0.9rem 1.2rem;
+        border-radius: 6px;
+        margin-top: 0.8rem;
+        margin-bottom: 1.2rem;
+        font-size: 0.92rem;
+        color: #166534;
+    }
+</style>
+""", unsafe_allow_html=True)
 
-def wqi_category(value):
-    """DOE WQI classification; an interpretation, not an XGBoost forecast."""
-    try:
-        x = float(value)
-        if pd.isna(x): return 'Unknown'
-        if x > 80: return 'Clean'
-        if x >= 60: return 'Slightly Polluted'
-        return 'Polluted'
-    except (TypeError, ValueError):
-        return 'Unknown'
 
-def forecast_cards(frame, river, station, history):
-    data = filter_station(filter_river(frame, river), station)
-    pred = col(data, 'predicted_wqi', 'predicted_next_wqi')
-    observed = col(data, 'last_observed_wqi', 'previous_wqi')
-    forecast_date = col(data, 'forecast_date_estimate', 'forecast_date')
-    station_key = col(data, 'station_id', 'station')
-    if data.empty or not pred:
-        st.info('No saved next-sampling WQI forecast for this model and station.')
-        return
-    data = data.copy()
-    data[pred] = pd.to_numeric(data[pred], errors='coerce')
-    data = data.dropna(subset=[pred])
-    if data.empty:
-        st.info('No numeric forecast values are available.')
-        return
-    data['Estimated category'] = data[pred].map(wqi_category)
-    st.markdown('#### Latest available forecast')
-    if len(data) == 1:
-        row = data.iloc[0]
-        cards = st.columns(3)
-        cards[0].metric('Last measured WQI', format_number(row[observed], 1) if observed else '—')
-        cards[1].metric('Predicted next WQI', format_number(row[pred], 1))
-        cards[2].metric('Estimated category', row['Estimated category'])
-        if forecast_date:
-            st.caption(f"Estimated next sampling event: {str(row[forecast_date])[:10]} (not a daily forecast)")
+st.markdown(ui.CSS, unsafe_allow_html=True)
+
+
+# ============================================================
+# HELPER: STATUS BADGE RENDERER
+# ============================================================
+
+def render_status_badge(status):
+    if status == STATUS_CLEAN:
+        return f'<span class="badge-clean">● {status}</span>'
+    elif status == STATUS_SLIGHTLY_POLLUTED:
+        return f'<span class="badge-slightly-polluted">▲ {status}</span>'
+    elif status == STATUS_POLLUTED:
+        return f'<span class="badge-polluted">■ {status}</span>'
     else:
-        cards = st.columns(3)
-        cards[0].metric('Stations forecasted', len(data))
-        cards[1].metric('Mean predicted WQI', format_number(data[pred].mean(), 1))
-        cards[2].metric('Estimated category of mean', wqi_category(data[pred].mean()))
-    st.caption('Status colours: 🔵 Clean (WQI > 80)  •  🟡 Slightly Polluted (60–80)  •  🔴 Polluted (< 60). Categories here are calculated from predicted WQI, not predicted by XGBoost.')
+        return f'<span style="background:#e2e8f0; color:#475569; padding:4px 12px; border-radius:9999px; font-weight:600;">{status}</span>'
 
-    st.markdown('#### Next-sampling forecast by station')
-    data['_label'] = data[station_key].astype(str) if station_key else [f'Station {i+1}' for i in range(len(data))]
-    data['_colour'] = data['Estimated category'].map(STATUS_COLORS)
-    fig = go.Figure()
-    fig.add_trace(go.Bar(x=data['_label'], y=data[pred], marker_color=data['_colour'], name='Predicted WQI',
-                         customdata=data[['Estimated category']].to_numpy(),
-                         hovertemplate='Station %{x}<br>Predicted WQI %{y:.1f}<br>%{customdata[0]}<extra></extra>'))
-    fig.add_hline(y=80, line_dash='dot', line_color='#2788e8', opacity=.5)
-    fig.add_hline(y=60, line_dash='dot', line_color='#e9b700', opacity=.5)
-    fig.update_layout(height=310, margin=dict(t=12,b=10), xaxis_title='Monitoring station', yaxis_title='Predicted next WQI', showlegend=False)
-    st.plotly_chart(fig, use_container_width=True)
-    if len(data) == 1 and observed and pd.notna(data.iloc[0][observed]):
-        st.markdown('#### Latest observation versus next forecast')
-        row = data.iloc[0]
-        compare = pd.DataFrame({'Stage':['Last observation','Next sampling forecast'], 'WQI':[float(row[observed]),float(row[pred])]})
-        fig2 = px.bar(compare, x='Stage', y='WQI', color='Stage', text='WQI', color_discrete_sequence=['#8c9baa','#458ed0'])
-        fig2.update_layout(height=250, showlegend=False, margin=dict(t=8,b=8))
-        st.plotly_chart(fig2, use_container_width=True)
-    columns = [c for c in [station_key, observed, pred, 'Estimated category', forecast_date] if c]
-    with st.expander('View exact station forecasts'):
-        st.dataframe(data[columns].drop_duplicates(), hide_index=True, use_container_width=True)
-    st.caption('These are next-sample estimates from saved model outputs. They are not live readings, seven-day forecasts, or a statement that river water is safe to use.')
 
-def projection_until_today(frame, river, station):
-    """Transparent carry-forward scenario, NOT repeated CEEMDAN-LSTM inference."""
-    data = filter_station(filter_river(frame, river), station)
-    pc = col(data, 'predicted_wqi', 'predicted_next_wqi')
-    dc = col(data, 'forecast_date_estimate', 'forecast_date')
-    lc = col(data, 'last_sample_date')
-    sc = col(data, 'station_id', 'station')
-    if data.empty or not pc or not sc:
-        return
-    data = data.copy()
-    data[pc] = pd.to_numeric(data[pc], errors='coerce')
-    data = data.dropna(subset=[pc])
-    if data.empty:
-        return
-    today = pd.Timestamp.now().normalize()
-    rows = []
-    for _, record in data.iterrows():
-        base = pd.to_datetime(record[dc], errors='coerce') if dc else pd.NaT
-        if pd.isna(base) and lc:
-            last = pd.to_datetime(record[lc], errors='coerce')
-            base = last + pd.DateOffset(months=2) if pd.notna(last) else pd.NaT
-        if pd.isna(base):
-            continue
-        base = pd.Timestamp(base).normalize()
-        value = float(record[pc])
-        if base > today:
-            continue
-        # Project at approximate 2-month intervals, matching the sampling cadence.
-        date = base
-        while date <= today:
-            rows.append({'Station': str(record[sc]), 'Period': date, 'Projected WQI': value,
-                         'Estimated status': wqi_category(value), 'Method': 'Constant carry-forward scenario'})
-            date += pd.DateOffset(months=2)
-        # Include today's date as an explicitly carried-forward estimate.
-        if rows and rows[-1]['Period'] < today:
-            rows.append({'Station': str(record[sc]), 'Period': today, 'Projected WQI': value,
-                         'Estimated status': wqi_category(value), 'Method': 'Constant carry-forward scenario'})
-    if not rows:
-        st.info('No saved forecast dates fall before today for the current selection.')
-        return
-    result = pd.DataFrame(rows)
-    st.markdown('#### Experimental projection up to today')
-    st.warning('This is **not a validated CEEMDAN–LSTM forecast for 2025–2026**. '
-               'It holds each station’s last saved next-sampling WQI prediction constant through today '
-               '(a persistence scenario). No new water-quality observations or future ML predictions are available.')
-    station_count = result['Station'].nunique()
-    end_rows = result.sort_values('Period').groupby('Station', as_index=False).tail(1)
-    a, b, c = st.columns(3)
-    a.metric('Projection date', today.strftime('%d %b %Y'))
-    b.metric('Stations', station_count)
-    c.metric('Mean projected WQI', format_number(end_rows['Projected WQI'].mean(), 1))
-    fig = px.line(result, x='Period', y='Projected WQI', color='Station', markers=True,
-                  title='Carry-forward scenario by station (not a daily model forecast)')
-    fig.update_layout(height=350, yaxis_title='WQI', xaxis_title='Approximate sampling period')
-    st.plotly_chart(fig, use_container_width=True)
-    status_counts = end_rows['Estimated status'].value_counts().rename_axis('Status').reset_index(name='Stations')
-    fig_status = px.bar(status_counts, x='Status', y='Stations', color='Status',
-                        color_discrete_map=STATUS_COLORS, title='Estimated status at projection endpoint')
-    fig_status.update_layout(height=250, showlegend=False)
-    st.plotly_chart(fig_status, use_container_width=True)
-    with st.expander('View / download experimental projections'):
-        st.dataframe(result, hide_index=True, use_container_width=True)
-        st.download_button('Download scenario CSV', result.to_csv(index=False),
-                           file_name=f'carry_forward_{river.replace(" ", "_")}.csv',
-                           mime='text/csv', key=f'projection_download_{river}')
+# ============================================================
+# SIDEBAR FILTERS & MODEL CONTROLS
+# ============================================================
 
-latest = prepare_river(csv_file(DASH / 'wqi_latest_forecasts.csv'))
-wqi = prepare_river(csv_file(DASH / 'wqi_evaluation_predictions.csv'))
-risk = prepare_river(csv_file(DASH / 'risk_evaluation_predictions.csv'))
-metrics = prepare_river(csv_file(DASH / 'model_metrics.csv'))
-confusions = prepare_river(csv_file(DASH / 'classification_confusion_matrices.csv'))
-observations = prepare_river(csv_file(DASH / 'latest_station_observations.csv'))
-integrated = prepare_river(csv_file(EVAL / 'integrated_pipeline_predictions.csv'))
-raw = prepare_river(csv_file(ROOT / 'outputs' / 'combined_doe_dataset.csv'))
+with st.sidebar:
+    st.markdown("### 🎛️ Dashboard Controls")
+    st.markdown("Configure river stations, dates, and prediction models.")
+    st.markdown("---")
 
-st.title('💧 River Water Quality Forecast')
-st.caption('Sungai Klang and Sungai Skudai • Seven-day illustrative outlook • All saved models')
-st.info('DOE samples are approximately two months apart. The seven-day display is a carry-forward scenario based on a saved next-sampling WQI estimate, not seven independently modelled daily forecasts.')
-if all(df.empty for df in [latest, wqi, risk, metrics, raw]):
-    st.error('No dashboard data found. Place app.py in the project root and run src/19_prepare_dashboard_data.py first.')
-    st.code('python src/19_prepare_dashboard_data.py\npython -m streamlit run app.py', language='powershell')
-    st.stop()
+    # 1. Model Selector
+    st.markdown("#### 🤖 Select Prediction Model")
+    selected_model = st.selectbox(
+        "Active Machine Learning Model",
+        options=ENGINE.get_models(),
+        index=3, # Default: CEEMDAN-LSTM
+        help="Select any forecasting or risk classification model."
+    )
+    st.caption(f"ℹ️ **{selected_model}**: {MODEL_DESCRIPTIONS.get(selected_model, '')}")
+    _bt = ENGINE.get_model_backtest(selected_model)
+    if _bt:
+        st.caption(f"Backtest: MAE {_bt['MAE']:.1f} · RMSE {_bt['RMSE']:.1f} · R² {_bt['R2']:.2f} (n={_bt['n_samples']})")
+    if selected_model == "CEEMDAN-LSTM-XGBoost":
+        st.info("This model's WQI forecast is identical to CEEMDAN-LSTM; the XGBoost stage only changes the risk class.")
+    compare_models = st.multiselect(
+        "Compare with (optional)",
+        options=[m for m in ENGINE.get_models() if m != selected_model],
+        default=[],
+        help="Overlay other models on the Daily, Weekly and Monthly forecast tabs.",
+    )
+    st.markdown("---")
 
-tab_prediction, tab_evaluation = st.tabs(['💧 Water Quality Forecast', '📊 Model Evaluation'])
-
-def seven_day_scenario(frame, river, station, chosen_model):
-    """Daily display ONLY: carry forward saved next-sampling estimate, no daily ML inference."""
-    data = filter_station(filter_river(frame, river), station)
-    pc = col(data, 'predicted_wqi', 'predicted_next_wqi')
-    sc = col(data, 'station_id', 'station')
-    oc = col(data, 'last_observed_wqi')
-    lc = col(data, 'last_sample_date')
-    if data.empty or not pc:
-        st.info('No saved next-sampling WQI estimate available for this selection.')
-        return
-    data = data.copy()
-    data[pc] = pd.to_numeric(data[pc], errors='coerce')
-    data = data.dropna(subset=[pc])
-    if data.empty:
-        st.info('No numeric next-sampling WQI estimate available.')
-        return
-    today = pd.Timestamp.now().normalize()
-    station_values = data[sc].astype(str) if sc else pd.Series(['Station'] * len(data), index=data.index)
-    data['_station'] = station_values
-    # Never call a carried-forward number a fresh 2026 CEEMDAN-LSTM forecast.
-    seed = float(data[pc].mean())
-    category = wqi_category(seed)
-    st.markdown('#### Latest estimated status — today')
-    c1, c2, c3 = st.columns(3)
-    c1.metric('Today', today.strftime('%d %b %Y'))
-    c2.metric('Scenario WQI', f'{seed:.1f}')
-    c3.metric('Estimated status', category)
-    st.caption('Today is the scenario display date, **not a DOE measurement date**. The latest available source observation is from 2024; this value is carried forward from a saved next-sampling forecast.')
-    st.markdown('#### Seven-day outlook (today + next six days)')
-    days = pd.date_range(today, periods=7, freq='D')
-    rows = []
-    for _, rec in data.iterrows():
-        for day in days:
-            rows.append({'Date':day, 'Station':rec['_station'], 'Scenario WQI':float(rec[pc]),
-                         'Estimated status':wqi_category(rec[pc]), 'Method':'Unchanged carry-forward of saved next-sampling forecast'})
-    outlook = pd.DataFrame(rows)
-    daily = outlook.groupby('Date', as_index=False)['Scenario WQI'].mean()
-    daily['Estimated status'] = daily['Scenario WQI'].map(wqi_category)
-    card_cols = st.columns(7)
-    for i, (_, record) in enumerate(daily.iterrows()):
-        with card_cols[i]:
-            st.markdown(f"**{record['Date']:%a}**")
-            st.markdown(f"**{record['Scenario WQI']:.1f}**")
-            st.caption(record['Estimated status'])
-    st.markdown('#### Seven-day WQI outlook chart')
-    if len(data) == 1:
-        fig = px.bar(daily, x='Date', y='Scenario WQI', color='Estimated status',
-                     color_discrete_map=STATUS_COLORS, text='Scenario WQI')
+    # Forecast scope used by the Daily / Weekly / Monthly tabs
+    st.markdown("#### 🎯 Forecast Scope")
+    _stns = ENGINE.get_stations("All")
+    scope_level_label = st.radio("Aggregate forecast by", ["All stations", "State", "River (Sungai)", "Single station"], index=2)
+    if scope_level_label == "All stations":
+        scope_level, scope_key, scope_title = "all", None, "All 22 stations"
+    elif scope_level_label == "State":
+        _opts = sorted({x["state"] for x in _stns})
+        scope_key = st.selectbox("State", _opts)
+        scope_level, scope_title = "state", scope_key
+    elif scope_level_label == "River (Sungai)":
+        scope_key = st.selectbox("River", ENGINE.get_rivers())
+        scope_level, scope_title = "river", scope_key
     else:
-        fig = px.line(outlook, x='Date', y='Scenario WQI', color='Station', markers=True)
-    fig.update_layout(height=340, yaxis_range=[0, 100], xaxis_title='Date', yaxis_title='Scenario WQI')
-    st.plotly_chart(fig, use_container_width=True)
-    st.warning('**Research limitation:** These seven daily values are a visualization-only persistence scenario. '
-               'Your CEEMDAN–LSTM is trained on approximately two-monthly observations and has NOT generated or validated seven independent daily forecasts. '
-               'The same estimate is repeated, not newly predicted each day. The dashboard does not provide live water quality.')
-    if lc and lc in data:
-        last_dates = pd.to_datetime(data[lc], errors='coerce').dropna()
-        if not last_dates.empty:
-            st.caption(f'Latest recorded sample in this selection: {last_dates.max():%d %b %Y}.')
-    st.download_button('Download seven-day scenario CSV', outlook.to_csv(index=False),
-                       file_name='seven_day_wqi_scenario.csv', mime='text/csv',
-                       key=f'daily_{river}_{station}'.replace(' ','_'))
+        _lab = st.selectbox("Station", [x["label"] for x in _stns])
+        _sel = next(x for x in _stns if x["label"] == _lab)
+        scope_level, scope_key, scope_title = "station", _sel["station_id"], f"{_sel['station_id']} · {_sel['location']}"
+    st.markdown("---")
 
-with tab_prediction:
-    st.subheader('Seven-day water quality outlook')
-    st.info('The display begins **today** and covers seven days. It is an explicitly labelled persistence scenario, not a validated daily ML forecast. All saved models remain accessible below.')
-    river_options = ['Both Rivers'] + sorted({v for df in [latest, raw, risk] if '_river' in df for v in df['_river'].dropna().unique()})
-    controls = st.columns([1,1,1.3])
-    river = controls[0].selectbox('River', river_options, key='forecast_river')
-    station_source = pd.concat([filter_river(df, river) for df in [latest, observations, raw] if not df.empty], ignore_index=True)
-    sc = col(station_source, 'station_id', 'id stn baru', 'station')
-    station_options = ['All Stations'] + (sorted(station_source[sc].dropna().astype(str).unique()) if sc else [])
-    station = controls[1].selectbox('Station', station_options, key='forecast_station')
-    available_models = sorted(set(model_names(latest) + model_names(wqi) + model_names(risk)))
-    if not available_models: available_models = ['No saved model']
-    preferred = next((m for m in available_models if 'CEEMDAN' in m.upper()), available_models[0])
-    model = controls[2].selectbox('Model (all saved models)', available_models,
-                                  index=available_models.index(preferred), key='forecast_model')
-    latest_models = model_names(latest)
-    if model in latest_models:
-        selected = latest.copy()
-        mc = col(selected, 'model', 'model_name')
-        if mc: selected = selected[selected[mc].astype(str) == model]
-        panels = [r for r in river_options[1:] if not filter_river(selected, r).empty] if river == 'Both Rivers' else [river]
-        for current_river in panels:
-            st.markdown(f'### {current_river}')
-            seven_day_scenario(selected, current_river, station, model)
-    else:
-        st.warning(f'**{model}** has no saved future WQI forecast. A seven-day WQI prediction cannot be attributed to this model.')
-        st.markdown('#### Available saved model results')
-        wqi_subset = wqi.copy()
-        wm = col(wqi_subset, 'model', 'model_name')
-        if wm: wqi_subset = wqi_subset[wqi_subset[wm].astype(str) == model]
-        risk_subset = risk.copy()
-        rm = col(risk_subset, 'model', 'model_name')
-        if rm: risk_subset = risk_subset[risk_subset[rm].astype(str) == model]
-        display = wqi_subset if not wqi_subset.empty else risk_subset
-        display = filter_station(filter_river(display, river), station)
-        if not display.empty:
-            st.dataframe(display.drop(columns=['_river'], errors='ignore'), hide_index=True, use_container_width=True)
-            st.caption('Historical held-out evaluation predictions only — not forecasts for today or the next seven days.')
+    # 2. Station Filter (as drawn in user wireframe)
+    st.markdown("#### 📍 River Basin & Station")
+    station_scope = st.radio(
+        "Stations Display Mode",
+        options=["Show both stations (default)", "Sungai Skudai", "Sungai Klang", "Specific Station"],
+        index=0,
+        help="Choose whether to view both major river systems side-by-side or focus on one."
+    )
+
+    specific_station_id = None
+    if station_scope == "Specific Station":
+        all_stns = ENGINE.get_stations("All")
+        stn_labels = [s["label"] for s in all_stns]
+        chosen_label = st.selectbox("Choose Monitoring Station", options=stn_labels, index=0)
+        specific_station_id = next(s["station_id"] for s in all_stns if s["label"] == chosen_label)
+
+    st.markdown("---")
+
+    # 3. Parameter Filter (as drawn in user wireframe)
+    st.markdown("#### 🧪 Water Quality Parameter")
+    parameter_filter = st.selectbox(
+        "Parameter View",
+        options=["Show all (WQI Overview)", "DO (Dissolved Oxygen)", "BOD (Biochemical Oxygen Demand)", 
+                 "COD (Chemical Oxygen Demand)", "NH3N (Ammoniacal Nitrogen)", "SS/TSS (Suspended Solids)", "pH"],
+        index=0,
+        help="Filter the chart view to the full WQI composite or an individual DOE sub-parameter."
+    )
+
+    st.markdown("---")
+
+    st.caption("🔮 Forecast horizon = each model's next DOE sampling date (about 60 days after the last sample).")
+    forecast_days = 60  # kept for the legacy trend tab; the series now ends at the real forecast date
+
+    st.markdown("---")
+    st.markdown("### 📊 Malaysian DOE Standards")
+    st.markdown("""
+    - **Clean**: WQI 81 - 100
+    - **Slightly Polluted**: WQI 60 - 80
+    - **Polluted**: WQI 0 - 59
+    """)
+
+
+# ============================================================
+# TREND TAB CONTROLS (date picker + legend from the original wireframe)
+# ============================================================
+
+def _render_trend_controls():
+    # Top Search Bar & Date Picker (Faithfully implements the top search bar from the sketch)
+    search_col1, search_col2, search_col3, search_col4 = st.columns([1.5, 1.8, 1.5, 1.2])
+
+    with search_col1:
+        search_station_mode = st.selectbox(
+            "🔍 Station Filter",
+            options=["Both Rivers (Klang & Skudai)", "Sungai Skudai Only", "Sungai Klang Only"],
+            index=0 if station_scope == "Show both stations (default)" else (1 if station_scope == "Sungai Skudai" else 2),
+            key="top_search_station"
+        )
+
+    with search_col2:
+        # Quick date selection preset or custom calendar
+        date_preset = st.selectbox(
+            "📅 Select Date / Period",
+            options=[
+                "July 2024 (as sketched in wireframe)",
+                "Latest Available Observation (Nov/Dec 2024)",
+                "Today / Current Forecast",
+                "Custom Date Picker"
+            ],
+            index=0,
+            key="date_preset_select"
+        )
+
+    with search_col3:
+        if date_preset == "July 2024 (as sketched in wireframe)":
+            user_selected_date = date(2024, 7, 15)
+            st.date_input("Target Date", value=user_selected_date, disabled=True)
+        elif date_preset == "Latest Available Observation (Nov/Dec 2024)":
+            user_selected_date = date(2024, 11, 15)
+            st.date_input("Target Date", value=user_selected_date, disabled=True)
+        elif date_preset == "Today / Current Forecast":
+            user_selected_date = date.today()
+            st.date_input("Target Date", value=user_selected_date, disabled=True)
         else:
-            st.info('No prediction rows for the selected model and filters.')
-    st.markdown('### Selected model evaluation')
-    chosen_metrics = metric_subset(metrics, model)
-    if '_river' in chosen_metrics and river != 'Both Rivers':
-        sub = filter_river(chosen_metrics, river)
-        if not sub.empty: chosen_metrics = sub
-    show_metric_cards(chosen_metrics)
-    st.caption('Evaluation scores are from previously saved test sets; they do not validate the seven-day scenario.')
+            user_selected_date = st.date_input("Target Date", value=date(2024, 7, 15), min_value=date(2023, 1, 1), max_value=date(2025, 6, 30))
 
-with tab_evaluation:
-    st.subheader('Model evaluation')
-    st.caption('Compare models using their saved test results. WQI regression and status classification use different metrics.')
-    section = st.radio('Evaluation category', ['WQI Regression', 'Contamination Classification', 'Integrated Pipeline'], horizontal=True, key='eval_category')
-    if section == 'WQI Regression':
-        show_table(metrics, 'Saved model metrics (all evaluation runs)', 'model_metrics.csv')
-        st.subheader('Actual versus predicted WQI')
-        wqi_models = model_names(wqi)
-        chosen = st.multiselect('Models to display', wqi_models, default=wqi_models, key='eval_wqi_models')
-        plot_data = wqi.copy()
-        mc = col(plot_data, 'model', 'model_name')
-        actual = col(plot_data, 'actual_wqi', 'actual')
-        predicted = col(plot_data, 'predicted_wqi', 'prediction')
-        if mc and actual and predicted and chosen:
-            plot_data = plot_data[plot_data[mc].astype(str).isin(chosen)].copy()
-            plot_data[actual] = pd.to_numeric(plot_data[actual], errors='coerce')
-            plot_data[predicted] = pd.to_numeric(plot_data[predicted], errors='coerce')
-            plot_data = plot_data.dropna(subset=[actual, predicted])
-            if not plot_data.empty:
-                fig = px.scatter(plot_data, x=actual, y=predicted, color=mc, hover_data=['_river'] if '_river' in plot_data else None)
-                low = min(plot_data[actual].min(), plot_data[predicted].min())
-                high = max(plot_data[actual].max(), plot_data[predicted].max())
-                fig.add_trace(go.Scatter(x=[low, high], y=[low, high], mode='lines', name='Perfect prediction', line=dict(dash='dash', color='gray')))
-                st.plotly_chart(fig, use_container_width=True)
-            else: st.info('No matching numeric WQI predictions.')
-        else: st.info('The saved WQI evaluation file does not contain the required model, actual and predicted columns, or no model is selected.')
-        with st.expander('WQI evaluation prediction records'):
-            st.dataframe(wqi.drop(columns=['_river'], errors='ignore'), use_container_width=True, hide_index=True)
-    elif section == 'Contamination Classification':
-        st.markdown('**Saved classification evaluation records**')
-        classification_metrics = metrics.copy()
-        type_col = col(classification_metrics, 'task', 'task_type', 'metric_type', 'evaluation_type')
-        if type_col:
-            subset = classification_metrics[classification_metrics[type_col].astype(str).str.contains('class|risk|status', case=False, na=False)]
-            if not subset.empty: classification_metrics = subset
-        st.dataframe(classification_metrics.drop(columns=['_river'], errors='ignore'), use_container_width=True, hide_index=True)
-        st.markdown('**Confusion matrices**')
-        if not confusions.empty:
-            st.dataframe(confusions.drop(columns=['_river'], errors='ignore'), use_container_width=True, hide_index=True)
-        else: st.info('No saved confusion-matrix file found.')
-        with st.expander('Classification prediction records'):
-            st.dataframe(risk.drop(columns=['_river'], errors='ignore'), use_container_width=True, hide_index=True)
+    with search_col4:
+        st.write("")
+        st.write("")
+        apply_search = st.button("Enter 🔍", type="primary", width="stretch")
+
+    st.markdown("""
+    <div class="info-callout">
+        💡 <strong>Showing selected date's Water Quality info</strong>: Live prediction and contamination classification dynamically updates according to user date selection and active model (<strong>{}</strong>).
+    </div>
+    """.format(selected_model), unsafe_allow_html=True)
+
+    # Legend Bar (Matching Sketch)
+    st.markdown("""
+    <div class="legend-container">
+        <span style="font-size:0.95rem; font-weight:700; color:#334155; margin-right: 0.5rem;">Water Quality Status Legend:</span>
+        <div class="legend-item"><div class="legend-dot" style="background:#2563EB;"></div><span>Clean (WQI 81 - 100)</span></div>
+        <div class="legend-item"><div class="legend-dot" style="background:#EAB308;"></div><span>Slightly Polluted (WQI 60 - 80)</span></div>
+        <div class="legend-item"><div class="legend-dot" style="background:#EF4444;"></div><span>Polluted (WQI 0 - 59)</span></div>
+        <span style="margin-left:auto; font-size:0.85rem; color:#64748b;">Thresholds: Malaysian Department of Environment (DOE) Standard</span>
+    </div>
+    """, unsafe_allow_html=True)
+    return user_selected_date
+
+
+# ============================================================
+# FUNCTION: RENDER WATER QUALITY TREND CHART WITH COLOR BANDS
+# ============================================================
+
+def create_trend_figure(daily_df, river_title, selected_date, param_view="Show all (WQI Overview)"):
+    fig = go.Figure()
+
+    # 1. Background Colored Zones (Clean: Blue, Slightly Polluted: Yellow, Polluted: Red)
+    # Matching the sketch's three colored horizontal bands!
+    fig.add_hrect(
+        y0=81, y1=100,
+        fillcolor="rgba(37, 99, 235, 0.16)",
+        line_width=0,
+        annotation_text="Clean (81-100)",
+        annotation_position="top left",
+        annotation_font=dict(color="#1d4ed8", size=10, weight="bold")
+    )
+    fig.add_hrect(
+        y0=60, y1=81,
+        fillcolor="rgba(234, 179, 8, 0.18)",
+        line_width=0,
+        annotation_text="Slightly Polluted (60-80)",
+        annotation_position="top left",
+        annotation_font=dict(color="#b45309", size=10, weight="bold")
+    )
+    fig.add_hrect(
+        y0=0, y1=60,
+        fillcolor="rgba(239, 68, 68, 0.16)",
+        line_width=0,
+        annotation_text="Polluted (0-59)",
+        annotation_position="bottom left",
+        annotation_font=dict(color="#b91c1c", size=10, weight="bold")
+    )
+
+    # 2. Historical / Known Model Trend Line
+    hist_df = daily_df[~daily_df["is_future"]]
+    future_df = daily_df[daily_df["is_future"]]
+
+    fig.add_trace(go.Scatter(
+        x=hist_df["date"],
+        y=hist_df["predicted_wqi"],
+        mode="lines",
+        line=dict(color="#0f172a", width=2.5),
+        name="Historical WQI Trend",
+        hovertemplate="<b>Date:</b> %{x|%Y-%m-%d}<br><b>WQI:</b> %{y:.1f}<extra></extra>"
+    ))
+
+    # 3. Future Daily Forecast Line (Dashed)
+    if not future_df.empty:
+        # Connect last historical to first future
+        connect_df = pd.concat([hist_df.tail(1), future_df])
+        fig.add_trace(go.Scatter(
+            x=connect_df["date"],
+            y=connect_df["predicted_wqi"],
+            mode="lines",
+            line=dict(color="#7c3aed", width=2.5, dash="dash"),
+            name="Daily Forecast Horizon",
+            hovertemplate="<b>Forecast Date:</b> %{x|%Y-%m-%d}<br><b>Projected WQI:</b> %{y:.1f}<extra></extra>"
+        ))
+
+    # 4. Actual Sampling Observations (Discrete markers)
+    obs_points = daily_df.dropna(subset=["actual_wqi"])
+    if not obs_points.empty:
+        fig.add_trace(go.Scatter(
+            x=obs_points["date"],
+            y=obs_points["actual_wqi"],
+            mode="markers",
+            marker=dict(
+                size=8,
+                color="#2563eb",
+                line=dict(width=1.5, color="#ffffff"),
+                symbol="circle"
+            ),
+            name="DOE Sampling Observations",
+            hovertemplate="<b>Observed Date:</b> %{x|%Y-%m-%d}<br><b>Actual WQI:</b> %{y:.1f}<extra></extra>"
+        ))
+
+    # 5. Highlight Selected Date Point
+    sel_dt = pd.to_datetime(selected_date).normalize()
+    if daily_df["date"].min() <= sel_dt <= daily_df["date"].max():
+        closest_row = daily_df.iloc[(daily_df["date"] - sel_dt).abs().argmin()]
+        fig.add_trace(go.Scatter(
+            x=[closest_row["date"]],
+            y=[closest_row["predicted_wqi"]],
+            mode="markers+text",
+            marker=dict(
+                size=14,
+                color="#ef4444",
+                symbol="star",
+                line=dict(width=2, color="#ffffff")
+            ),
+            text=[f"  Target: {closest_row['predicted_wqi']:.1f}"],
+            textposition="top center",
+            textfont=dict(color="#0f172a", size=11, weight="bold"),
+            name="Selected Date",
+            hovertemplate="<b>Target Date:</b> %{x|%Y-%m-%d}<br><b>WQI:</b> %{y:.1f}<extra></extra>"
+        ))
+        # Add vertical line for target date
+        fig.add_vline(
+            x=closest_row["date"],
+            line_width=1.5,
+            line_dash="dot",
+            line_color="rgba(15, 23, 42, 0.6)"
+        )
+
+    # Layout styling
+    fig.update_layout(
+        title=dict(
+            text=f"<b>{river_title}</b> — Water Quality Index (WQI) Trend & Daily Forecast",
+            font=dict(size=15, color="#1e293b")
+        ),
+        xaxis=dict(
+            title="Date",
+            showgrid=True,
+            gridcolor="rgba(226, 232, 240, 0.6)",
+            zeroline=False
+        ),
+        yaxis=dict(
+            title="Water Quality Index (WQI)",
+            range=[0, 105],
+            showgrid=True,
+            gridcolor="rgba(226, 232, 240, 0.6)",
+            tickvals=[0, 20, 40, 60, 81, 100],
+            zeroline=False
+        ),
+        legend=dict(
+            orientation="h",
+            yanchor="bottom",
+            y=1.02,
+            xanchor="right",
+            x=1,
+            bgcolor="rgba(255,255,255,0.8)"
+        ),
+        margin=dict(l=40, r=20, t=50, b=40),
+        height=380,
+        plot_bgcolor="#ffffff",
+        paper_bgcolor="#ffffff"
+    )
+
+    return fig
+
+
+# ============================================================
+# FUNCTION: RENDER RIVER PANEL (CHART + OUTPUT KPI CARDS)
+# Matches the wireframe: Chart on top, user input + output below
+# ============================================================
+
+def render_river_section(river_name, default_station_id, target_date, model_name, param_filter):
+    st.subheader(f"📊 {river_name}")
+
+    # Available stations for this river
+    stns = ENGINE.get_stations(river_name)
+    stn_options = {s["label"]: s["station_id"] for s in stns}
+    
+    col_sel, col_empty = st.columns([2.5, 3.5])
+    with col_sel:
+        stn_label = st.selectbox(
+            f"Select Station in {river_name}:",
+            options=list(stn_options.keys()),
+            index=0,
+            key=f"select_{river_name}"
+        )
+    station_id = stn_options[stn_label]
+
+    # Daily time-series and snapshot
+    daily_df = ENGINE.get_daily_time_series(station_id, model_name=model_name, days_forecast_ahead=forecast_days)
+    snapshot = ENGINE.get_date_snapshot(station_id, target_date, model_name=model_name)
+
+    if daily_df.empty or snapshot is None:
+        st.warning(f"No monitoring records available for {station_id}.")
+        return
+
+    # Render Trend Chart
+    fig = create_trend_figure(daily_df, f"{river_name} ({station_id})", target_date, param_filter)
+    st.plotly_chart(fig, width="stretch")
+
+    # OUTPUT SECTION (Faithfully matching user's sketch!)
+    # Wireframe specifies:
+    # "Date: July" <--- user input
+    # "Water Quality Index: 88" } output
+    # "Contamination: Polluted" } output
+    # "Showing today's Water Quality info, change according to user input in search bar"
+    st.markdown("##### 📌 Station Status at Selected Date")
+    
+    out_col1, out_col2, out_col3, out_col4, out_col5 = st.columns(5)
+
+    with out_col1:
+        st.markdown(f"""
+        <div class="metric-card">
+            <div class="metric-label">📅 Selected Date</div>
+            <div class="metric-value" style="font-size:1.4rem;">{snapshot['month_year']}</div>
+            <div class="metric-delta" style="color:#64748b;">Target: {snapshot['display_date']}</div>
+        </div>
+        """, unsafe_allow_html=True)
+
+    with out_col2:
+        st.markdown(f"""
+        <div class="metric-card">
+            <div class="metric-label">💧 Water Quality Index (WQI)</div>
+            <div class="metric-value">{snapshot['predicted_wqi']}</div>
+            <div class="metric-delta" style="color:#0284c7;">DOE {snapshot['class']}</div>
+        </div>
+        """, unsafe_allow_html=True)
+
+    with out_col3:
+        status_html = render_status_badge(snapshot['status'])
+        st.markdown(f"""
+        <div class="metric-card">
+            <div class="metric-label">⚠️ Contamination Risk</div>
+            <div style="margin-top:0.6rem; margin-bottom:0.4rem;">{status_html}</div>
+            <div class="metric-delta" style="color:#64748b;">Model: {snapshot['model']}</div>
+        </div>
+        """, unsafe_allow_html=True)
+
+    with out_col4:
+        st.markdown(f"""
+        <div class="metric-card">
+            <div class="metric-label">🎯 Indicative Class Probabilities</div>
+            <div style="font-size:0.85rem; margin-top:0.3rem;">
+                <span style="color:#2563eb; font-weight:700;">Clean:</span> {snapshot['prob_clean']*100:.1f}%<br>
+                <span style="color:#d97706; font-weight:700;">Slightly:</span> {snapshot['prob_slightly_polluted']*100:.1f}%<br>
+                <span style="color:#dc2626; font-weight:700;">Polluted:</span> {snapshot['prob_polluted']*100:.1f}%
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
+
+    with out_col5:
+        p = snapshot['parameters']
+        st.markdown(f"""
+        <div class="metric-card">
+            <div class="metric-label">🧪 Key Parameters</div>
+            <div style="font-size:0.82rem; margin-top:0.3rem; line-height:1.4;">
+                <b>DO:</b> {p['DO']} mg/L | <b>BOD:</b> {p['BOD']} mg/L<br>
+                <b>COD:</b> {p['COD']} mg/L | <b>NH3N:</b> {p['NH3N']} mg/L<br>
+                <b>SS:</b> {p['SS']} mg/L | <b>pH:</b> {p['pH']}
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
+
+    st.markdown("<br>", unsafe_allow_html=True)
+
+
+# ============================================================
+# MAIN DISPLAY LOGIC (Based on station_scope selection)
+# ============================================================
+
+tabs = st.tabs([
+    "🏠 Overview",
+    "🗺️ State & River Map",
+    "📅 Daily Forecast",
+    "🗓️ Weekly Forecast",
+    "📆 Monthly Forecast",
+    "📈 Trend & Date Snapshot",
+    "🔬 Model Benchmark",
+    "🧪 What-If Simulator"
+])
+
+# ------------------------------------------------------------
+# TAB 1: WIREFRAME VIEW (Trend Charts + Date Snapshot)
+# ------------------------------------------------------------
+with tabs[5]:
+    user_selected_date = _render_trend_controls()
+    if station_scope == "Show both stations (default)":
+        # Wireframe layout: Sungai Skudai on top, Sungai Klang below (or side-by-side)
+        render_river_section(
+            river_name="Sungai Skudai",
+            default_station_id="3JSKU001",
+            target_date=user_selected_date,
+            model_name=selected_model,
+            param_filter=parameter_filter
+        )
+        st.markdown("---")
+        render_river_section(
+            river_name="Sungai Klang",
+            default_station_id="2BKLG005",
+            target_date=user_selected_date,
+            model_name=selected_model,
+            param_filter=parameter_filter
+        )
+    elif station_scope == "Sungai Skudai":
+        render_river_section(
+            river_name="Sungai Skudai",
+            default_station_id="3JSKU001",
+            target_date=user_selected_date,
+            model_name=selected_model,
+            param_filter=parameter_filter
+        )
+    elif station_scope == "Sungai Klang":
+        render_river_section(
+            river_name="Sungai Klang",
+            default_station_id="2BKLG005",
+            target_date=user_selected_date,
+            model_name=selected_model,
+            param_filter=parameter_filter
+        )
     else:
-        st.markdown('**Integrated CEEMDAN–LSTM + XGBoost evaluation**')
-        st.info('The integrated approach is presented as an evaluated model, not as a proven improvement in contamination prediction.')
-        metrics_json = EVAL / 'integrated_pipeline_metrics.json'
-        if metrics_json.exists():
-            with metrics_json.open('r', encoding='utf-8') as f:
-                st.json(json.load(f), expanded=2)
-        else: st.info('Integrated pipeline metrics JSON not found.')
-        show_table(integrated, 'Integrated pipeline saved predictions', 'integrated_pipeline_predictions.csv')
+        # Specific Station Selected
+        all_stns = ENGINE.get_stations("All")
+        stn_match = next((s for s in all_stns if s["station_id"] == specific_station_id), None)
+        river_name = stn_match["river"] if stn_match else "Sungai Klang"
+        render_river_section(
+            river_name=river_name,
+            default_station_id=specific_station_id,
+            target_date=user_selected_date,
+            model_name=selected_model,
+            param_filter=parameter_filter
+        )
 
-st.caption('Research prototype • Uses saved DOE observations and model outputs • Predictions are estimates and should not be treated as real-time water safety measurements.')
+
+# ------------------------------------------------------------
+# SHARED HELPERS FOR THE FORECAST TABS
+# ------------------------------------------------------------
+HOW_TO_READ = (
+    "DOE samples each station about every 60 days, and every model forecasts **one** value per station: the next sampling date. "
+    "The daily line is therefore a straight-line trajectory between real points (sample → sample for the past, last sample → model "
+    "forecast for the future). Weekly and monthly values are averages of that daily line. The shaded band / error bars show ±1 RMSE "
+    "from the model's backtest, widening from 0 at the last sample. Treat the shape between points as an illustration, not a measurement."
+)
+
+
+def _scope_series(model):
+    return ENGINE.get_group_series(scope_level, scope_key, model)
+
+
+def _compare_series():
+    return {m: _scope_series(m) for m in compare_models}
+
+
+def _forecast_kpis(series):
+    hist = series[~series["is_forecast"]]
+    last = series.iloc[-1]
+    prev = float(hist["wqi"].iloc[-1])
+    delta = float(last["wqi"]) - prev
+    bt = ENGINE.get_model_backtest(selected_model)
+    k1, k2, k3, k4 = st.columns(4)
+    k1.metric("Last observed WQI", f"{prev:.1f}", help=f"DOE sample on {hist['date'].iloc[-1]:%d %b %Y}")
+    k2.metric(f"Forecast WQI ({last['date']:%d %b %Y})", f"{float(last['wqi']):.1f}", f"{delta:+.1f} vs last sample")
+    k3.markdown("**Forecast status**")
+    k3.markdown(render_status_badge(classify_wqi(last["wqi"])), unsafe_allow_html=True)
+    k4.metric("Backtest RMSE", f"{bt.get('RMSE', float('nan')):.1f}", help="Typical size of the model's error, in WQI points.")
+    if scope_level != "station":
+        st.caption(f"Averaged over {int(series['n_stations'].iloc[0])} stations. The series ends at the median station forecast date; "
+                   "stations with an earlier forecast date are held flat after it.")
+
+
+def _render_period_tab(freq, unit, title_word):
+    series = _scope_series(selected_model)
+    if series.empty:
+        st.warning("No data for this scope.")
+        return
+    _forecast_kpis(series)
+    cmp_series = _compare_series()
+    agg = ENGINE.aggregate_series(series, freq)
+    cmp_agg = {m: ENGINE.aggregate_series(x, freq) for m, x in cmp_series.items()}
+    st.plotly_chart(period_figure(agg, selected_model, f"<b>{scope_title}</b> — {title_word} WQI forecast ({selected_model})",
+                                  cmp_agg, unit=unit, periods_history=8 if freq == "W" else 6), width="stretch")
+    st.caption("* partial period (fewer days than a full " + unit + " are covered by the data).  " + HOW_TO_READ)
+
+    view = agg[agg["is_forecast"]].copy()
+    first_fc = agg.index[agg["is_forecast"]].min()
+    context = agg.iloc[max(0, first_fc - 2):first_fc]
+    table = pd.concat([context, view])
+    out = pd.DataFrame({
+        title_word: table["label"].values + np.where(table["partial"].values, " *", ""),
+        "Type": np.where(table["is_forecast"], np.where(table["forecast_days"] < table["n_days"], "Mixed", "Forecast"), "Past"),
+        f"{selected_model} WQI": table["wqi"].values,
+        "Low (−1 RMSE)": table["lower"].round(1).values,
+        "High (+1 RMSE)": table["upper"].round(1).values,
+        "Status": table["status"].values,
+        "DOE Class": table["class"].values,
+        "Days covered": table["n_days"].values,
+    })
+    for m, a in cmp_agg.items():
+        out[f"{m} WQI"] = a.set_index("label")["wqi"].reindex(table["label"]).values
+    st.dataframe(out, hide_index=True, width="stretch")
+    st.download_button(f"📥 Download {title_word.lower()} forecast CSV", out.to_csv(index=False).encode("utf-8"),
+                       file_name=f"wqi_{title_word.lower()}_forecast_{scope_level}_{selected_model}.csv", mime="text/csv",
+                       key=f"dl_{freq}")
+
+
+# ------------------------------------------------------------
+# TAB: OVERVIEW (hero + forecast strip + parameters + map + uses)
+# ------------------------------------------------------------
+def _map_focus_for_scope():
+    if scope_level == "state":
+        return "Johor (Sungai Skudai)" if scope_key == "Johor" else "Klang Valley (Selangor + KL)"
+    if scope_level == "river":
+        return "Johor (Sungai Skudai)" if "Skudai" in scope_key else "Klang Valley (Selangor + KL)"
+    if scope_level == "station":
+        return "Johor (Sungai Skudai)" if scope_key.startswith("3J") else "Klang Valley (Selangor + KL)"
+    return "All monitored areas"
+
+
+with tabs[0]:
+    series = _scope_series(selected_model)
+    if series.empty:
+        st.warning("No data for this scope.")
+    else:
+        hist = series[~series["is_forecast"]]
+        last = series.iloc[-1]
+        info = ENGINE.get_scope_parameters(scope_level, scope_key)
+        fr = ENGINE.get_data_freshness()
+        bt = ENGINE.get_model_backtest(selected_model)
+        if scope_level == "station":
+            _s = next(x for x in ENGINE.get_stations("All") if x["station_id"] == scope_key)
+            crumb = f"Malaysia / {_s['state']} / {_s['river']}"
+        elif scope_level in ("state", "river"):
+            crumb = f"Malaysia / {scope_key}"
+        else:
+            crumb = "Malaysia / Klang Valley &amp; Johor"
+        left_html, right_html = ui.hero(scope_title, crumb, selected_model, float(last["wqi"]), last["date"],
+                                        float(hist["wqi"].iloc[-1]), hist["date"].iloc[-1], bt.get("RMSE", float("nan")),
+                                        info.get("main"))
+        h1, h2 = st.columns([1.7, 1])
+        h1.markdown(left_html, unsafe_allow_html=True)
+        h2.markdown(right_html, unsafe_allow_html=True)
+        st.markdown(ui.freshness(fr), unsafe_allow_html=True)
+
+        agg_w = ENGINE.aggregate_series(series, "W")
+        st.markdown('<div class="card"><h4>Weekly forecast</h4><div class="cap">Average WQI per week · colour = DOE status · range = ±1 RMSE from the model backtest. '
+                    'See the Daily, Weekly and Monthly tabs for tables and model comparison.</div>' + ui.weekly_strip(agg_w) + '</div>',
+                    unsafe_allow_html=True)
+
+        c_left, c_right = st.columns([1.25, 1])
+        with c_left:
+            agg_m = ENGINE.aggregate_series(series, "M")
+            st.markdown('<div class="card"><h4>Monthly forecast</h4><div class="cap">Bars show the ±1 RMSE range on a 0–100 scale.</div>'
+                        + ui.monthly_rows(agg_m) + '</div>', unsafe_allow_html=True)
+            with st.container(border=True):
+                st.markdown("#### Station map")
+                st.caption(f"{selected_model} forecast at each station's next sampling date. Open the State & River Map tab for more views.")
+                _snap = ENGINE.get_map_snapshot(selected_model, mode="forecast")
+                _fig = map_figure(_snap, _map_focus_for_scope())
+                _fig.update_layout(height=400)
+                st.plotly_chart(_fig, width="stretch", key="overview_map")
+        with c_right:
+            if info:
+                st.markdown(f'<div class="card"><h4>Water parameters</h4><div class="cap">Latest DOE sample, averaged over {info["n_stations"]} station(s) '
+                            f'(most recent {info["last_sample"]:%d %b %Y}). Dot colour = DOE sub-index band.</div>'
+                            + ui.parameter_rows(info) + '</div>', unsafe_allow_html=True)
+                st.markdown(ui.parameter_alert(info), unsafe_allow_html=True)
+                st.markdown("<div style='height:14px'></div>", unsafe_allow_html=True)
+            uses_html, cls = ui.uses_rows(float(last["wqi"]))
+            st.markdown(f'<div class="card"><h4>What this water can be used for</h4><div class="cap">Forecast {cls} · beneficial uses under Malaysia\'s National Water Quality Standards (NWQS).</div>'
+                        + uses_html + '</div>', unsafe_allow_html=True)
+
+
+# ------------------------------------------------------------
+# TAB: STATE & RIVER MAP
+# ------------------------------------------------------------
+with tabs[1]:
+    st.subheader("🗺️ Water Quality by State and River")
+    m_col1, m_col2, m_col3 = st.columns([2, 2, 2])
+    with m_col1:
+        map_mode_label = st.radio("Show on map", ["Forecast (next sampling date)", "Latest DOE sample", "Pick a date"],
+                                  horizontal=False, key="map_mode")
+    with m_col2:
+        map_focus = st.selectbox("Zoom to", list(MAP_FOCUS.keys()), key="map_focus")
+    with m_col3:
+        map_date = None
+        if map_mode_label == "Pick a date":
+            map_date = st.date_input("Date", value=date(2024, 12, 1), min_value=date(2023, 1, 16), max_value=date(2025, 1, 6),
+                                     key="map_date", help="Values come from the daily trajectory; dates outside a station's range use its nearest end.")
+    map_mode = {"Forecast (next sampling date)": "forecast", "Latest DOE sample": "observed", "Pick a date": "date"}[map_mode_label]
+    snap = ENGINE.get_map_snapshot(selected_model, mode=map_mode, target_date=map_date)
+
+    if snap.empty:
+        st.info("No station data available.")
+    else:
+        fig_map = map_figure(snap, map_focus, title=f"{map_mode_label} — {selected_model}")
+        st.plotly_chart(fig_map, width="stretch")
+        st.caption("State shading and outline = state's mean station WQI; dots = individual stations, coloured by DOE status. "
+                   "Only states/rivers in the DOE dataset (Selangor, W.P. Kuala Lumpur, Johor) have data; other states are shown for context. "
+                   "The map needs internet access to load OpenStreetMap tiles.")
+        c1, c2 = st.columns(2)
+        with c1:
+            st.markdown("##### By state")
+            ss = state_summary(snap).rename(columns={"state": "State", "stations": "Stations", "wqi": "Mean WQI", "status": "Status", "polluted": "Polluted stations"})
+            st.dataframe(ss[["State", "Stations", "Mean WQI", "Status", "Polluted stations"]], hide_index=True, width="stretch")
+        with c2:
+            st.markdown("##### By river")
+            rs = river_summary(snap).rename(columns={"river": "River", "stations": "Stations", "wqi": "Mean WQI", "status": "Status", "polluted": "Polluted stations"})
+            st.dataframe(rs[["River", "Stations", "Mean WQI", "Status", "Polluted stations"]], hide_index=True, width="stretch")
+        st.markdown("##### Stations")
+        tbl = snap[["station_id", "location", "river", "state", "wqi", "status", "class", "as_of", "last_observed_wqi"]].copy()
+        tbl["as_of"] = tbl["as_of"].dt.strftime("%Y-%m-%d")
+        tbl.columns = ["Station", "Location", "River", "State", "WQI", "Status", "DOE Class", "As of", "Last observed WQI"]
+        st.dataframe(tbl.sort_values("WQI"), hide_index=True, width="stretch")
+
+
+# ------------------------------------------------------------
+# TAB: DAILY FORECAST
+# ------------------------------------------------------------
+with tabs[2]:
+    st.subheader(f"📅 Daily forecast — {scope_title}")
+    series = _scope_series(selected_model)
+    if series.empty:
+        st.warning("No data for this scope.")
+    else:
+        _forecast_kpis(series)
+        cmp_series = _compare_series()
+        st.plotly_chart(daily_figure(series, selected_model, f"<b>{scope_title}</b> — daily WQI ({selected_model})", cmp_series), width="stretch")
+        st.caption(HOW_TO_READ)
+
+        fc = series[series["is_forecast"]].copy()
+        tbl = pd.DataFrame({
+            "Date": fc["date"].dt.strftime("%Y-%m-%d"),
+            f"{selected_model} WQI": fc["wqi"].round(1),
+            "Low (−1 RMSE)": fc["lower"].round(1),
+            "High (+1 RMSE)": fc["upper"].round(1),
+            "Status": fc["wqi"].apply(classify_wqi),
+            "DOE Class": fc["wqi"].apply(get_doe_class),
+        })
+        for m, cs in cmp_series.items():
+            tbl[f"{m} WQI"] = cs.set_index("date")["wqi"].reindex(fc["date"]).round(1).values
+        st.dataframe(tbl, hide_index=True, width="stretch", height=320)
+        st.download_button("📥 Download daily forecast CSV", tbl.to_csv(index=False).encode("utf-8"),
+                           file_name=f"wqi_daily_forecast_{scope_level}_{selected_model}.csv", mime="text/csv", key="dl_D")
+
+
+# ------------------------------------------------------------
+# TAB: WEEKLY FORECAST
+# ------------------------------------------------------------
+with tabs[3]:
+    st.subheader(f"🗓️ Weekly forecast — {scope_title}")
+    _render_period_tab("W", "week", "Week")
+
+
+# ------------------------------------------------------------
+# TAB: MONTHLY FORECAST
+# ------------------------------------------------------------
+with tabs[4]:
+    st.subheader(f"📆 Monthly forecast — {scope_title}")
+    _render_period_tab("M", "month", "Month")
+
+
+# ------------------------------------------------------------
+# TAB 4: MULTI-MODEL BENCHMARK ARENA (Do It Better!)
+# ------------------------------------------------------------
+with tabs[6]:
+    st.subheader("🔬 Multi-Model Performance Benchmark Arena")
+    st.markdown("Comprehensive comparison of all 6 models implemented across WQI regression and Contamination Risk classification.")
+
+    metrics_df = ENGINE.get_metrics_table()
+    if not metrics_df.empty:
+        m_col1, m_col2 = st.columns([3, 2])
+        
+        with m_col1:
+            st.markdown("##### 📋 Unified Evaluation Metrics Table")
+            st.warning("Models were scored on different numbers of test samples (see n_samples), so these metrics are indicative, not a like-for-like ranking. "
+                       "Persistence (R² 0.64) is a strong baseline; plain LSTM and XGBoost scored below it on their smaller test sets.")
+            display_m = metrics_df.copy()
+            st.dataframe(
+                display_m.style.format({
+                    "MAE": "{:.3f}",
+                    "RMSE": "{:.3f}",
+                    "R2": "{:.3f}",
+                    "accuracy": "{:.3f}",
+                    "balanced_accuracy": "{:.3f}",
+                    "macro_f1": "{:.3f}"
+                }).highlight_min(subset=["MAE", "RMSE"], color="#dcfce7")
+                  .highlight_max(subset=["R2", "accuracy", "macro_f1"], color="#dcfce7"),
+                width="stretch"
+            )
+
+        with m_col2:
+            st.markdown("##### 🏆 WQI Regression Accuracy (R² Score)")
+            fig_r2 = px.bar(
+                metrics_df,
+                x="model",
+                y="R2",
+                color="model",
+                text="R2",
+                title="Model R² Score Comparison (Higher is Better)",
+                color_discrete_sequence=px.colors.qualitative.Prism
+            )
+            fig_r2.update_traces(texttemplate="%{text:.3f}", textposition="outside")
+            fig_r2.update_layout(showlegend=False, height=320, margin=dict(l=20, r=20, t=40, b=20))
+            st.plotly_chart(fig_r2, width="stretch")
+
+        st.markdown("---")
+        
+        c_col1, c_col2 = st.columns(2)
+        with c_col1:
+            fig_mae = px.bar(
+                metrics_df,
+                x="model",
+                y="MAE",
+                color="model",
+                text="MAE",
+                title="Mean Absolute Error (MAE - Lower is Better)",
+                color_discrete_sequence=px.colors.qualitative.Safe
+            )
+            fig_mae.update_traces(texttemplate="%{text:.2f}", textposition="outside")
+            fig_mae.update_layout(showlegend=False, height=320)
+            st.plotly_chart(fig_mae, width="stretch")
+
+        with c_col2:
+            fig_acc = px.bar(
+                metrics_df,
+                x="model",
+                y="accuracy",
+                color="model",
+                text="accuracy",
+                title="Contamination Risk Classification Accuracy",
+                color_discrete_sequence=px.colors.qualitative.Pastel
+            )
+            fig_acc.update_traces(texttemplate="%{text:.1%}", textposition="outside")
+            fig_acc.update_layout(showlegend=False, height=320)
+            st.plotly_chart(fig_acc, width="stretch")
+    else:
+        st.info("Model metrics are currently being consolidated.")
+
+
+# ------------------------------------------------------------
+# TAB 5: WHAT-IF SCENARIO SIMULATOR (Do It Better!)
+# ------------------------------------------------------------
+with tabs[7]:
+    st.subheader("🧪 Interactive What-If Water Parameter Simulator")
+    st.markdown("Adjust physical-chemical water parameters below to simulate instant real-time DOE Water Quality Index, DOE Class, and Contamination Risk prediction.")
+
+    sim_col1, sim_col2 = st.columns([3, 2])
+
+    with sim_col1:
+        st.markdown("##### 🎚️ Environmental Parameter Controls")
+        sim_do = st.slider("Dissolved Oxygen DO (% Saturation)", min_value=0.0, max_value=150.0, value=75.0, step=1.0)
+        sim_bod = st.slider("Biochemical Oxygen Demand BOD (mg/L)", min_value=0.0, max_value=25.0, value=3.5, step=0.1)
+        sim_cod = st.slider("Chemical Oxygen Demand COD (mg/L)", min_value=0.0, max_value=100.0, value=20.0, step=1.0)
+        sim_nh3n = st.slider("Ammoniacal Nitrogen NH3-N (mg/L)", min_value=0.0, max_value=8.0, value=0.4, step=0.05)
+        sim_ss = st.slider("Total Suspended Solids SS (mg/L)", min_value=0.0, max_value=300.0, value=40.0, step=2.0)
+        sim_ph = st.slider("pH Value", min_value=4.0, max_value=10.0, value=7.2, step=0.1)
+
+    sim_result = calculate_doe_wqi(sim_do, sim_bod, sim_cod, sim_nh3n, sim_ss, sim_ph)
+
+    with sim_col2:
+        st.markdown("##### 🎯 Real-Time Simulated Output")
+        sim_wqi = sim_result["wqi"]
+        sim_status = sim_result["status"]
+        sim_class = sim_result["class"]
+        
+        st.markdown(f"""
+        <div class="metric-card" style="text-align:center; padding: 2rem;">
+            <div class="metric-label">Simulated Water Quality Index</div>
+            <div class="metric-value" style="font-size:3.5rem; color:{get_class_color(sim_status)};">{sim_wqi}</div>
+            <div style="margin-top:1rem; margin-bottom:0.5rem;">{render_status_badge(sim_status)}</div>
+            <div style="font-weight:700; color:#475569; font-size:1.1rem; margin-top:0.5rem;">DOE {sim_class}</div>
+        </div>
+        """, unsafe_allow_html=True)
+        
+        st.markdown("##### 📐 Calculated DOE Sub-Indices")
+        sub_df = pd.DataFrame(list(sim_result["sub_indices"].items()), columns=["Sub-Index", "Score (0-100)"])
+        st.dataframe(sub_df, width="stretch", height=220)
+
+
+# ============================================================
+# FOOTER
+# ============================================================
+st.markdown("---")
+st.markdown("""
+<div style="display:flex; justify-content:space-between; color:#64748b; font-size:0.85rem;">
+    <span>🌊 Malaysian Department of Environment (DOE) River Water Quality Monitoring System</span>
+    <span>Models: Persistence | CEEMDAN | LSTM | CEEMDAN-LSTM | XGBoost | CEEMDAN-LSTM-XGBoost</span>
+</div>
+""", unsafe_allow_html=True)

@@ -1,0 +1,23 @@
+river,station_id,station_location,last_sample_date,last_observed_wqi,last_observed_status
+KLANG,2BKLG005,KLANG GATE,2024-11-07 11:55:00,98,Clean
+KLANG,2BKLG006,ZOO LUAR,2024-11-07 11:03:00,72,Slightly Polluted
+KLANG,2BKLG016,NORTHPORT,2024-11-06 11:34:00,62,Slightly Polluted
+KLANG,2BKLG022,BANDAR KLANG,2024-11-06 12:21:00,52,Polluted
+KLANG,2BKLG023,TNB CONOUGHT,2024-11-06 12:56:00,55,Polluted
+KLANG,2BKLG024,HICOM,2024-11-06 14:19:00,56,Polluted
+KLANG,2BKLG034,PUCHONG,2024-11-06 14:47:00,40,Polluted
+KLANG,2BKLG050,SEKSYEN 25 SHAH ALAM OVITA OIL,2024-11-06 13:32:00,46,Polluted
+KLANG,2WKLG001,BALAI POLIS PETALING,2024-11-15 12:17:00,61,Slightly Polluted
+KLANG,2WKLG002,JALAN SULTAN SULAIMAN,2024-11-14 10:53:00,60,Slightly Polluted
+KLANG,2WKLG003,DANG WANGI,2024-11-14 11:21:00,67,Slightly Polluted
+KLANG,2WKLG004,KG.ABDULLAH HUKUM,2024-11-13 12:11:00,56,Polluted
+KLANG,2WKLG049,BERHAMPIRAN BALAI BOMBA KERAMAT,2024-11-11 11:27:00,82,Clean
+SKUDAI,3JSKU001,"Jambatan dekat Kg.Teluk Serdang,Taman Perling.",2024-11-11 11:05:00,68,Slightly Polluted
+SKUDAI,3JSKU002,"Jambatan dekat Taman Sutera Utama,Tun Aminah.",2024-11-11 12:09:00,75,Slightly Polluted
+SKUDAI,3JSKU003,"PUB Sultan Ismail,Skudai.",2024-11-11 10:05:00,71,Slightly Polluted
+SKUDAI,3JSKU004,Jambatan dekat pekan Sengkang/Ladang Fraser.,2024-11-17 07:49:00,93,Clean
+SKUDAI,3JSKU005,Jambatan dekat bandar Kulai,2024-11-17 08:13:00,85,Clean
+SKUDAI,3JSKU006,Jambatan pekan Saleng.,2024-12-10 11:03:00,78,Slightly Polluted
+SKUDAI,3JSKU007,Jambatan dekat kawasan industri Senai.,2024-11-11 09:43:00,67,Slightly Polluted
+SKUDAI,3JSKU010,"Jambatan dekat landasan k/api,Bandar Kulai.",2024-11-18 09:09:00,63,Slightly Polluted
+SKUDAI,3JSKU011,"200m dari Kuil Buddha Ladang Sedenak,Sedenak",2024-11-18 09:35:00,94,Clean

@@ -1,23 +1,12 @@
-# Python
 __pycache__/
 *.py[cod]
 .venv/
 venv/
-
-# Local datasets (may contain restricted DOE data)
-data/
-*.xlsx
-*.xls
-*.csv
-
-# Generated outputs
-outputs/
-
-# Environment variables and secrets
 .env
 .env.*
-
-# IDE and operating-system files
-.vscode/
+!.env.example
+.streamlit/secrets.toml
+node_modules/
+dist/
 .DS_Store
-Thumbs.db
+.ipynb_checkpoints/

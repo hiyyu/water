@@ -1,0 +1,14 @@
+Integrated XGBoost classification report
+Training rows: 61
+Testing rows: 27
+Test period begins: 2024-09-17 10:51:00
+
+                   precision    recall  f1-score   support
+
+            Clean       0.50      1.00      0.67         5
+         Polluted       0.40      0.22      0.29         9
+Slightly Polluted       0.42      0.38      0.40        13
+
+         accuracy                           0.44        27
+        macro avg       0.44      0.54      0.45        27
+     weighted avg       0.43      0.44      0.41        27

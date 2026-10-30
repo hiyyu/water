@@ -1,0 +1,4 @@
+,predicted_Clean,predicted_Polluted,predicted_Slightly Polluted
+actual_Clean,5,0,0
+actual_Polluted,0,2,7
+actual_Slightly Polluted,5,3,5
