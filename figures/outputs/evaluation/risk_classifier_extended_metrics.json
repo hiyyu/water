@@ -1,0 +1,44 @@
+{
+    "task": "Next-sample contamination-status classification",
+    "features": [
+        "previous_wqi",
+        "wqi_two_samples_ago",
+        "DO % Sat",
+        "DO mg/l",
+        "BOD mg/l",
+        "COD mg/l",
+        "SS mg/l",
+        "pH",
+        "NH3-N mg/l",
+        "DO INDEX",
+        "BOD INDEX",
+        "COD INDEX",
+        "AN INDEX",
+        "SS INDEX",
+        "pH Index",
+        "river",
+        "previous_status"
+    ],
+    "examples": 220,
+    "training_examples": 176,
+    "testing_examples": 44,
+    "unique_stations": 22,
+    "test_start": "2024-09-09 10:58:00",
+    "test_end": "2024-12-10 11:03:00",
+    "classes": [
+        "Clean",
+        "Polluted",
+        "Slightly Polluted"
+    ],
+    "persistence_baseline": {
+        "accuracy": 0.6136363636363636,
+        "balanced_accuracy": 0.6080808080808081,
+        "macro_f1": 0.606312292358804
+    },
+    "xgboost": {
+        "accuracy": 0.5681818181818182,
+        "balanced_accuracy": 0.5217171717171717,
+        "macro_f1": 0.5349881796690307
+    },
+    "warning": "Preliminary experiment using a small dataset. Results require further validation and additional data."
+}

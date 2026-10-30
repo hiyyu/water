@@ -1,0 +1,33 @@
+{
+    "experiment": "Leakage-controlled station-wise walk-forward validation",
+    "target": "Next observed WQI",
+    "input_file": "C:\\Users\\pc\\Documents\\WaterQuality\\water\\outputs\\combined_doe_dataset.csv",
+    "lookback": 3,
+    "minimum_training_observations": 8,
+    "max_imfs": 4,
+    "ceemdan_trials": 5,
+    "lstm_epochs": 30,
+    "forecasting_method": "CEEMDAN is recomputed on each station's historical prefix. A new LSTM is trained at each forecast origin.",
+    "model_metrics": {
+        "n_predictions": 88,
+        "MAE": 6.123065341602672,
+        "RMSE": 7.860389139559947,
+        "R2": 0.6587259580432794
+    },
+    "persistence_baseline_metrics": {
+        "n_predictions": 88,
+        "MAE": 8.761363636363637,
+        "RMSE": 11.003615108433475,
+        "R2": 0.331215892645329
+    },
+    "failed_model_predictions": 0,
+    "prediction_file": "C:\\Users\\pc\\Documents\\WaterQuality\\water\\outputs\\evaluation\\ceemdan_lstm_walk_forward_predictions.csv",
+    "river_metrics_file": "C:\\Users\\pc\\Documents\\WaterQuality\\water\\outputs\\evaluation\\ceemdan_lstm_walk_forward_by_river.csv",
+    "limitations": [
+        "Only a small number of observations are available per station.",
+        "Each station-specific LSTM has very few training windows.",
+        "CEEMDAN components may be unstable for short sequences.",
+        "Results are preliminary and require evaluation on additional DOE data.",
+        "This validation evaluates one-step-ahead forecasts of the next observed sample, not a fixed daily or monthly horizon."
+    ]
+}

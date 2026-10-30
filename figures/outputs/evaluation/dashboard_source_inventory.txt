@@ -1,0 +1,735 @@
+DASHBOARD SOURCE FILE INVENTORY
+======================================================================
+Evaluation folder: C:\Users\pc\Documents\WaterQuality\water\outputs\evaluation
+
+
+======================================================================
+FILE: baseline_wqi_metrics.csv
+======================================================================
+Rows: 2
+Columns: 4
+
+Column names and data types:
+  - model (object)
+  - MAE (float64)
+  - RMSE (float64)
+  - R2 (float64)
+
+First 3 rows:
+            model      MAE      RMSE       R2
+      Persistence 6.571429  8.041559 0.687245
+Linear Regression 8.232858 10.178556 0.498933
+
+======================================================================
+FILE: baseline_wqi_station_metrics.csv
+======================================================================
+Rows: 40
+Columns: 7
+
+Column names and data types:
+  - river (object)
+  - station_id (object)
+  - model (object)
+  - test_examples (int64)
+  - MAE (float64)
+  - RMSE (float64)
+  - R2 (float64)
+
+First 3 rows:
+river station_id             model  test_examples      MAE      RMSE        R2
+KLANG   2BKLG016       Persistence              2 8.500000 10.124228 -1.847222
+KLANG   2BKLG016 Linear Regression              2 9.933864 11.639966 -2.763578
+KLANG   2BKLG022       Persistence              2 6.500000  6.519202 -0.700000
+
+======================================================================
+FILE: baseline_wqi_test_predictions.csv
+======================================================================
+Rows: 42
+Columns: 11
+
+Column names and data types:
+  - sample_date (object)
+  - river (object)
+  - station_id (object)
+  - wqi (int64)
+  - previous_wqi (float64)
+  - wqi_two_samples_ago (float64)
+  - next_sample_date (object)
+  - next_sample_wqi (float64)
+  - days_until_next_sample (float64)
+  - persistence_prediction (float64)
+  - linear_prediction (float64)
+
+First 3 rows:
+sample_date  river station_id  wqi  previous_wqi  wqi_two_samples_ago next_sample_date  next_sample_wqi  days_until_next_sample  persistence_prediction  linear_prediction
+ 2024-07-12  KLANG   2WKLG049   76          76.0                 67.0       2024-09-10             90.0                    60.0                    76.0          70.484502
+ 2024-07-08 SKUDAI   3JSKU004   95          94.0                 95.0       2024-09-10             95.0                    64.0                    94.0          88.083492
+ 2024-07-09 SKUDAI   3JSKU006   73          79.0                 67.0       2024-09-11             76.0                    64.0                    79.0          71.387972
+
+======================================================================
+FILE: ceemdan_lstm_forecasts.csv
+======================================================================
+Rows: 22
+Columns: 9
+
+Column names and data types:
+  - river (object)
+  - station_id (object)
+  - last_sample_date (object)
+  - forecast_date_estimate (object)
+  - last_observed_wqi (float64)
+  - predicted_next_wqi (float64)
+  - persistence_baseline (float64)
+  - number_of_observations (int64)
+  - model (object)
+
+First 3 rows:
+river station_id last_sample_date forecast_date_estimate  last_observed_wqi  predicted_next_wqi  persistence_baseline  number_of_observations                     model
+KLANG   2BKLG005       2024-11-07             2025-01-06               98.0           92.155676                  98.0                      12 Experimental CEEMDAN-LSTM
+KLANG   2BKLG006       2024-11-07             2025-01-06               72.0           66.517461                  72.0                      12 Experimental CEEMDAN-LSTM
+KLANG   2BKLG016       2024-11-06             2025-01-07               62.0           62.306354                  62.0                      12 Experimental CEEMDAN-LSTM
+
+======================================================================
+FILE: ceemdan_lstm_walk_forward_by_river.csv
+======================================================================
+Rows: 2
+Columns: 9
+
+Column names and data types:
+  - river (object)
+  - ceemdan_lstm_n (int64)
+  - ceemdan_lstm_MAE (float64)
+  - ceemdan_lstm_RMSE (float64)
+  - ceemdan_lstm_R2 (float64)
+  - persistence_n (int64)
+  - persistence_MAE (float64)
+  - persistence_RMSE (float64)
+  - persistence_R2 (float64)
+
+First 3 rows:
+ river  ceemdan_lstm_n  ceemdan_lstm_MAE  ceemdan_lstm_RMSE  ceemdan_lstm_R2  persistence_n  persistence_MAE  persistence_RMSE  persistence_R2
+ KLANG              52          6.939127           8.444883         0.550346             52         9.500000         11.168293        0.213562
+SKUDAI              36          4.944310           6.929624         0.633565             36         7.694444         10.761299        0.116295
+
+======================================================================
+FILE: ceemdan_lstm_walk_forward_metrics.json
+======================================================================
+{
+  "experiment": "Leakage-controlled station-wise walk-forward validation",
+  "target": "Next observed WQI",
+  "input_file": "C:\\Users\\pc\\Documents\\WaterQuality\\water\\outputs\\combined_doe_dataset.csv",
+  "lookback": 3,
+  "minimum_training_observations": 8,
+  "max_imfs": 4,
+  "ceemdan_trials": 5,
+  "lstm_epochs": 30,
+  "forecasting_method": "CEEMDAN is recomputed on each station's historical prefix. A new LSTM is trained at each forecast origin.",
+  "model_metrics": {
+    "n_predictions": 88,
+    "MAE": 6.123065341602672,
+    "RMSE": 7.860389139559947,
+    "R2": 0.6587259580432794
+  },
+  "persistence_baseline_metrics": {
+    "n_predictions": 88,
+    "MAE": 8.761363636363637,
+    "RMSE": 11.003615108433475,
+    "R2": 0.331215892645329
+  },
+  "failed_model_predictions": 0,
+  "prediction_file": "C:\\Users\\pc\\Documents\\WaterQuality\\water\\outputs\\evaluation\\ceemdan_lstm_walk_forward_predictions.csv",
+  "river_metrics_file": "C:\\Users\\pc\\Documents\\WaterQuality\\water\\outputs\\evaluation\\ceemdan_lstm_walk_forward_by_river.csv",
+  "limitations": [
+    "Only a small number of observations are available per station.",
+    "Each station-specific LSTM has very few training windows.",
+    "CEEMDAN components may be unstable for short sequences.",
+    "Results are preliminary and require evaluation on additional DOE data.",
+    "This validation evaluates one-step-ahead forecasts of the next observed sample, not a fixed daily or monthly horizon."
+  ]
+}
+
+======================================================================
+FILE: ceemdan_lstm_walk_forward_predictions.csv
+======================================================================
+Rows: 88
+Columns: 11
+
+Column names and data types:
+  - river (object)
+  - station_id (object)
+  - target_date (object)
+  - training_observations (int64)
+  - previous_wqi (float64)
+  - actual_wqi (float64)
+  - predicted_wqi (float64)
+  - persistence_prediction (float64)
+  - ceemdan_lstm_error (float64)
+  - persistence_error (float64)
+  - forecast_error_message (float64)
+
+First 3 rows:
+river station_id         target_date  training_observations  previous_wqi  actual_wqi  predicted_wqi  persistence_prediction  ceemdan_lstm_error  persistence_error  forecast_error_message
+KLANG   2BKLG005 2024-05-07 11:35:00                      8          95.0        87.0      95.333923                    95.0            8.333923                8.0                     NaN
+KLANG   2BKLG005 2024-07-10 11:30:00                      9          87.0        94.0      94.108795                    87.0            0.108795               -7.0                     NaN
+KLANG   2BKLG005 2024-09-09 11:34:00                     10          94.0        95.0      94.342819                    94.0           -0.657181               -1.0                     NaN
+
+======================================================================
+FILE: integrated_pipeline_classification_report.txt
+======================================================================
+Integrated XGBoost classification report
+Training rows: 61
+Testing rows: 27
+Test period begins: 2024-09-17 10:51:00
+
+                   precision    recall  f1-score   support
+
+            Clean       0.50      1.00      0.67         5
+         Polluted       0.40      0.22      0.29         9
+Slightly Polluted       0.42      0.38      0.40        13
+
+         accuracy                           0.44        27
+        macro avg       0.44      0.54      0.45        27
+     weighted avg       0.43      0.44      0.41        27
+
+
+======================================================================
+FILE: integrated_pipeline_confusion_matrix.csv
+======================================================================
+Rows: 3
+Columns: 4
+
+Column names and data types:
+  - Unnamed: 0 (object)
+  - predicted_Clean (int64)
+  - predicted_Polluted (int64)
+  - predicted_Slightly Polluted (int64)
+
+First 3 rows:
+              Unnamed: 0  predicted_Clean  predicted_Polluted  predicted_Slightly Polluted
+            actual_Clean                5                   0                            0
+         actual_Polluted                0                   2                            7
+actual_Slightly Polluted                5                   3                            5
+
+======================================================================
+FILE: integrated_pipeline_metrics.json
+======================================================================
+{
+  "experiment": "CEEMDAN-LSTM + XGBoost integrated evaluation",
+  "data_source": "C:\\Users\\pc\\Documents\\WaterQuality\\water\\outputs\\combined_doe_dataset.csv",
+  "ceemdan_lstm_predictions_source": "C:\\Users\\pc\\Documents\\WaterQuality\\water\\outputs\\evaluation\\ceemdan_lstm_walk_forward_predictions.csv",
+  "split_method": "Chronological split by target date",
+  "training_date_cutoff": "2024-09-17",
+  "training_rows": 61,
+  "testing_rows": 27,
+  "test_period_start": "2024-09-17",
+  "test_period_end": "2024-12-10",
+  "wqi_forecasting_metrics_on_integrated_test_rows": {
+    "n_predictions": 27,
+    "MAE": 5.6418318571867765,
+    "RMSE": 7.908980775901723,
+    "R2": 0.69150571541645
+  },
+  "risk_classification": {
+    "persistence_baseline": {
+      "n_predictions": 27,
+      "accuracy": 0.6296296296296297,
+      "balanced_accuracy": 0.6866096866096866,
+      "macro_f1": 0.6495726495726496,
+      "class_report": {
+        "Clean": {
+          "precision": 0.7142857142857143,
+          "recall": 1.0,
+          "f1-score": 0.8333333333333334,
+          "support": 5.0
+        },
+        "Polluted": {
+          "precision": 0.5714285714285714,
+          "recall": 0.4444444444444444,
+          "f1-score": 0.5,
+          "support": 9.0
+        },
+        "Slightly Polluted": {
+          "precision": 0.6153846153846154,
+          "recall": 0.6153846153846154,
+          "f1-score": 0.6153846153846154,
+          "support": 13.0
+        },
+        "accuracy": 0.6296296296296297,
+        "macro avg": {
+          "precision": 0.6336996336996337,
+          "recall": 0.6866096866096866,
+          "f1-score": 0.6495726495726496,
+          "support": 27.0
+        },
+        "weighted avg": {
+          "precision": 0.6190476190476191,
+          "recall": 0.6296296296296297,
+          "f1-score": 0.617283950617284,
+          "support": 27.0
+        }
+      }
+    },
+    "xgboost_history_only": {
+      "n_predictions": 27,
+      "accuracy": 0.48148148148148145,
+      "balanced_accuracy": 0.5612535612535613,
+      "macro_f1": 0.47863247863247865,
+      "class_report": {
+        "Clean": {
+          "precision": 0.5,
+          "recall": 1.0,
+          "f1-score": 0.6666666666666666,
+          "support": 5.0
+        },
+        "Polluted": {
+          "precision": 0.5,
+          "recall": 0.2222222222222222,
+          "f1-score": 0.3076923076923077,
+          "support": 9.0
+        },
+        "Slightly Polluted": {
+          "precision": 0.46153846153846156,
+          "recall": 0.46153846153846156,
+          "f1-score": 0.46153846153846156,
+          "support": 13.0
+        },
+        "accuracy": 0.48148148148148145,
+        "macro avg": {
+          "precision": 0.4871794871794872,
+          "recall": 0.5612535612535613,
+          "f1-score": 0.47863247863247865,
+          "support": 27.0
+        },
+        "weighted avg": {
+          "precision": 0.48148148148148145,
+          "recall": 0.48148148148148145,
+          "f1-score": 0.4482431149097816,
+          "support": 27.0
+        }
+      }
+    },
+    "xgboost_history_plus_predicted_wqi": {
+      "n_predictions": 27,
+      "accuracy": 0.4444444444444444,
+      "balanced_accuracy": 0.5356125356125356,
+      "macro_f1": 0.4507936507936508,
+      "class_report": {
+        "Clean": {
+          "precision": 0.5,
+          "recall": 1.0,
+          "f1-score": 0.6666666666666666,
+          "support": 5.0
+        },
+        "Polluted": {
+          "precision": 0.4,
+          "recall": 0.2222222222222222,
+          "f1-score": 0.2857142857142857,
+          "support": 9.0
+        },
+        "Slightly Polluted": {
+          "precision": 0.4166666666666667,
+          "recall": 0.38461538461538464,
+          "f1-score": 0.4,
+          "support": 13.0
+        },
+        "accuracy": 0.4444444444444444,
+        "macro avg": {
+          "precision": 0.4388888888888889,
+          "recall": 0.5356125356125356,
+          "f1-score": 0.4507936507936508,
+          "support": 27.0
+        },
+        "weighted avg": {
+          "precision": 0.42654320987654315,
+          "recall": 0.4444444444444444,
+          "f1-score": 0.4112874779541446,
+          "support": 27.0
+        }
+      }
+    }
+  },
+  "files": {
+    "predictions": "C:\\Users\\pc\\Documents\\WaterQuality\\water\\outputs\\evaluation\\integrated_pipeline_predictions.csv",
+    "confusion_matrix": "C:\\Users\\pc\\Documents\\WaterQuality\\water\\outputs\\evaluation\\integrated_pipeline_confusion_matrix.csv",
+    "classification_report": "C:\\Users\\pc\\Documents\\WaterQuality\\water\\outputs\\evaluation\\integrated_pipeline_classification_report.txt"
+  },
+  "limitations": [
+    "Only dates with available CEEMDAN-LSTM walk-forward forecasts are evaluated.",
+    "The integrated test set is small and contains only later target dates.",
+    "A class absent from training cannot be learned by XGBoost.",
+    "Results depend on the current 2023-2024 DOE dataset.",
+    "The status labels reflect the supplied dataset's categories; they are not a separate independently measured contamination-risk score.",
+    "More DOE data and repeated chronological validation are needed before drawing final conclusions."
+  ]
+}
+
+======================================================================
+FILE: integrated_pipeline_predictions.csv
+======================================================================
+Rows: 27
+Columns: 16
+
+Column names and data types:
+  - river (object)
+  - station_id (object)
+  - previous_sample_date (object)
+  - target_date (object)
+  - previous_wqi (float64)
+  - wqi_two_samples_ago (float64)
+  - predicted_wqi (float64)
+  - actual_wqi_from_source (float64)
+  - previous_status (object)
+  - actual_status (object)
+  - persistence_status_prediction (object)
+  - xgboost_history_prediction (object)
+  - xgboost_integrated_prediction (object)
+  - probability_clean (float64)
+  - probability_polluted (float64)
+  - probability_slightly_polluted (float64)
+
+First 3 rows:
+river station_id previous_sample_date         target_date  previous_wqi  wqi_two_samples_ago  predicted_wqi  actual_wqi_from_source   previous_status     actual_status persistence_status_prediction xgboost_history_prediction xgboost_integrated_prediction  probability_clean  probability_polluted  probability_slightly_polluted
+KLANG   2BKLG022  2024-07-18 11:40:00 2024-09-17 10:51:00          59.0                 68.0      62.204746                    62.0          Polluted Slightly Polluted                      Polluted          Slightly Polluted             Slightly Polluted           0.011786              0.012561                       0.975653
+KLANG   2BKLG023  2024-07-18 12:21:00 2024-09-17 11:26:00          64.0                 67.0      60.090813                    51.0 Slightly Polluted          Polluted             Slightly Polluted          Slightly Polluted             Slightly Polluted           0.011755              0.012718                       0.975527
+KLANG   2BKLG050  2024-07-18 13:18:00 2024-09-17 12:16:00          56.0                 69.0      62.278934                    62.0          Polluted Slightly Polluted                      Polluted          Slightly Polluted             Slightly Polluted           0.019924              0.012458                       0.967618
+
+======================================================================
+FILE: risk_classifier_confusion_matrix.csv
+======================================================================
+Rows: 3
+Columns: 4
+
+Column names and data types:
+  - Unnamed: 0 (object)
+  - Predicted_Clean (int64)
+  - Predicted_Polluted (int64)
+  - Predicted_Slightly Polluted (int64)
+
+First 3 rows:
+              Unnamed: 0  Predicted_Clean  Predicted_Polluted  Predicted_Slightly Polluted
+            Actual_Clean               10                   1                            1
+         Actual_Polluted                0                   3                            7
+Actual_Slightly Polluted                3                   9                           10
+
+======================================================================
+FILE: risk_classifier_extended_confusion_matrix.csv
+======================================================================
+Rows: 3
+Columns: 4
+
+Column names and data types:
+  - Unnamed: 0 (object)
+  - Predicted_Clean (int64)
+  - Predicted_Polluted (int64)
+  - Predicted_Slightly Polluted (int64)
+
+First 3 rows:
+              Unnamed: 0  Predicted_Clean  Predicted_Polluted  Predicted_Slightly Polluted
+            Actual_Clean                7                   2                            3
+         Actual_Polluted                0                   3                            7
+Actual_Slightly Polluted                2                   5                           15
+
+======================================================================
+FILE: risk_classifier_extended_metrics.json
+======================================================================
+{
+  "task": "Next-sample contamination-status classification",
+  "features": [
+    "previous_wqi",
+    "wqi_two_samples_ago",
+    "DO % Sat",
+    "DO mg/l",
+    "BOD mg/l",
+    "COD mg/l",
+    "SS mg/l",
+    "pH",
+    "NH3-N mg/l",
+    "DO INDEX",
+    "BOD INDEX",
+    "COD INDEX",
+    "AN INDEX",
+    "SS INDEX",
+    "pH Index",
+    "river",
+    "previous_status"
+  ],
+  "examples": 220,
+  "training_examples": 176,
+  "testing_examples": 44,
+  "unique_stations": 22,
+  "test_start": "2024-09-09 10:58:00",
+  "test_end": "2024-12-10 11:03:00",
+  "classes": [
+    "Clean",
+    "Polluted",
+    "Slightly Polluted"
+  ],
+  "persistence_baseline": {
+    "accuracy": 0.6136363636363636,
+    "balanced_accuracy": 0.6080808080808081,
+    "macro_f1": 0.606312292358804
+  },
+  "xgboost": {
+    "accuracy": 0.5681818181818182,
+    "balanced_accuracy": 0.5217171717171717,
+    "macro_f1": 0.5349881796690307
+  },
+  "warning": "Preliminary experiment using a small dataset. Results require further validation and additional data."
+}
+
+======================================================================
+FILE: risk_classifier_extended_predictions.csv
+======================================================================
+Rows: 44
+Columns: 24
+
+Column names and data types:
+  - river (object)
+  - station_id (object)
+  - previous_sample_date (object)
+  - target_date (object)
+  - previous_wqi (int64)
+  - wqi_two_samples_ago (float64)
+  - previous_status (object)
+  - target_status (object)
+  - DO % Sat (float64)
+  - DO mg/l (float64)
+  - BOD mg/l (float64)
+  - COD mg/l (int64)
+  - SS mg/l (float64)
+  - pH (float64)
+  - NH3-N mg/l (float64)
+  - DO INDEX (int64)
+  - BOD INDEX (int64)
+  - COD INDEX (int64)
+  - AN INDEX (int64)
+  - SS INDEX (int64)
+  - pH Index (int64)
+  - baseline_prediction (object)
+  - xgboost_prediction (object)
+  - xgboost_correct (bool)
+
+First 3 rows:
+river station_id previous_sample_date         target_date  previous_wqi  wqi_two_samples_ago   previous_status target_status  DO % Sat  DO mg/l  BOD mg/l  COD mg/l  SS mg/l    pH  NH3-N mg/l  DO INDEX  BOD INDEX  COD INDEX  AN INDEX  SS INDEX  pH Index baseline_prediction xgboost_prediction  xgboost_correct
+KLANG   2BKLG006  2024-07-10 10:48:00 2024-09-09 10:58:00            77                 70.0 Slightly Polluted         Clean    86.989    7.172       4.0        29    198.0 6.926        0.38        95         83         64        68        49        99   Slightly Polluted  Slightly Polluted            False
+KLANG   2BKLG005  2024-07-10 11:30:00 2024-09-09 11:34:00            94                 87.0             Clean         Clean    91.228    7.356       NaN         6     16.0 6.818        0.08        97         96         91        92        88        99               Clean              Clean             True
+KLANG   2WKLG049  2024-07-12 11:14:00 2024-09-10 11:15:00            76                 76.0 Slightly Polluted         Clean    84.496    6.893       5.0        31     40.0 7.074        1.32        93         79         62        41        76        99   Slightly Polluted  Slightly Polluted            False
+
+======================================================================
+FILE: risk_classifier_extended_report.txt
+======================================================================
+EXTENDED CONTAMINATION STATUS CLASSIFIER
+=======================================================
+
+Features: ['previous_wqi', 'wqi_two_samples_ago', 'DO % Sat', 'DO mg/l', 'BOD mg/l', 'COD mg/l', 'SS mg/l', 'pH', 'NH3-N mg/l', 'DO INDEX', 'BOD INDEX', 'COD INDEX', 'AN INDEX', 'SS INDEX', 'pH Index', 'river', 'previous_status']
+
+PERSISTENCE BASELINE
+{
+    "accuracy": 0.6136363636363636,
+    "balanced_accuracy": 0.6080808080808081,
+    "macro_f1": 0.606312292358804
+}
+
+EXTENDED XGBOOST
+{
+    "accuracy": 0.5681818181818182,
+    "balanced_accuracy": 0.5217171717171717,
+    "macro_f1": 0.5349881796690307
+}
+
+CLASSIFICATION REPORT
+                   precision    recall  f1-score   support
+
+            Clean       0.78      0.58      0.67        12
+         Polluted       0.30      0.30      0.30        10
+Slightly Polluted       0.60      0.68      0.64        22
+
+         accuracy                           0.57        44
+        macro avg       0.56      0.52      0.53        44
+     weighted avg       0.58      0.57      0.57        44
+
+
+CONFUSION MATRIX
+                          Predicted_Clean  Predicted_Polluted  Predicted_Slightly Polluted
+Actual_Clean                            7                   2                            3
+Actual_Polluted                         0                   3                            7
+Actual_Slightly Polluted                2                   5                           15
+
+LIMITATION
+Preliminary experiment using a small dataset. Results require further validation and additional data.
+
+
+======================================================================
+FILE: risk_classifier_metrics.json
+======================================================================
+{
+  "task": "Next-sample river contamination status classification",
+  "input_examples": 220,
+  "training_examples": 176,
+  "testing_examples": 44,
+  "unique_stations": 22,
+  "training_target_start": "2023-05-04 00:00:00",
+  "training_target_end": "2024-07-18 16:34:00",
+  "testing_target_start": "2024-09-09 10:58:00",
+  "testing_target_end": "2024-12-10 11:03:00",
+  "classes": [
+    "Clean",
+    "Polluted",
+    "Slightly Polluted"
+  ],
+  "baseline": {
+    "accuracy": 0.6136363636363636,
+    "balanced_accuracy": 0.6080808080808081,
+    "macro_f1": 0.606312292358804
+  },
+  "xgboost": {
+    "accuracy": 0.5227272727272727,
+    "balanced_accuracy": 0.5292929292929293,
+    "macro_f1": 0.5202898550724638
+  },
+  "warning": "Preliminary results from a small dataset. Not a validated operational water-quality warning system."
+}
+
+======================================================================
+FILE: risk_classifier_predictions.csv
+======================================================================
+Rows: 44
+Columns: 12
+
+Column names and data types:
+  - river (object)
+  - station_id (object)
+  - previous_sample_date (object)
+  - target_date (object)
+  - previous_wqi (int64)
+  - wqi_two_samples_ago (float64)
+  - previous_status (object)
+  - target_status (object)
+  - baseline_prediction (object)
+  - xgboost_prediction (object)
+  - baseline_correct (bool)
+  - xgboost_correct (bool)
+
+First 3 rows:
+river station_id previous_sample_date         target_date  previous_wqi  wqi_two_samples_ago   previous_status target_status baseline_prediction xgboost_prediction  baseline_correct  xgboost_correct
+KLANG   2BKLG006  2024-07-10 10:48:00 2024-09-09 10:58:00            77                 70.0 Slightly Polluted         Clean   Slightly Polluted  Slightly Polluted             False            False
+KLANG   2BKLG005  2024-07-10 11:30:00 2024-09-09 11:34:00            94                 87.0             Clean         Clean               Clean              Clean              True             True
+KLANG   2WKLG049  2024-07-12 11:14:00 2024-09-10 11:15:00            76                 76.0 Slightly Polluted         Clean   Slightly Polluted           Polluted             False            False
+
+======================================================================
+FILE: risk_classifier_report.txt
+======================================================================
+NEXT-SAMPLE CONTAMINATION STATUS CLASSIFICATION
+============================================================
+
+PERSISTENCE BASELINE
+Accuracy: 0.6136
+Balanced accuracy: 0.6081
+Macro F1-score: 0.6063
+
+XGBOOST
+Accuracy: 0.5227
+Balanced accuracy: 0.5293
+Macro F1-score: 0.5203
+
+CLASSIFICATION REPORT
+                   precision    recall  f1-score   support
+
+            Clean       0.77      0.83      0.80        12
+         Polluted       0.23      0.30      0.26        10
+Slightly Polluted       0.56      0.45      0.50        22
+
+         accuracy                           0.52        44
+        macro avg       0.52      0.53      0.52        44
+     weighted avg       0.54      0.52      0.53        44
+
+
+CONFUSION MATRIX
+                          Predicted_Clean  Predicted_Polluted  Predicted_Slightly Polluted
+Actual_Clean                           10                   1                            1
+Actual_Polluted                         0                   3                            7
+Actual_Slightly Polluted                3                   9                           10
+
+IMPORTANT LIMITATION
+Preliminary results from a small dataset. Not a validated operational water-quality warning system.
+
+
+======================================================================
+FILE: walk_forward_metrics.csv
+======================================================================
+Rows: 2
+Columns: 4
+
+Column names and data types:
+  - model (object)
+  - MAE (float64)
+  - RMSE (float64)
+  - R2 (float64)
+
+First 3 rows:
+            model      MAE     RMSE       R2
+      Persistence 6.363636 8.081966 0.639214
+Linear Regression 7.072730 9.137446 0.538826
+
+======================================================================
+FILE: walk_forward_metrics_by_river.csv
+======================================================================
+Rows: 4
+Columns: 6
+
+Column names and data types:
+  - river (object)
+  - model (object)
+  - examples (int64)
+  - MAE (float64)
+  - RMSE (float64)
+  - mean_error (float64)
+
+First 3 rows:
+ river             model  examples      MAE      RMSE  mean_error
+ KLANG       Persistence        52 7.288462  9.079775   -1.442308
+ KLANG Linear Regression        52 7.715245 10.115748    1.150626
+SKUDAI       Persistence        36 5.027778  6.370505   -1.694444
+
+======================================================================
+FILE: walk_forward_metrics_by_station.csv
+======================================================================
+Rows: 44
+Columns: 7
+
+Column names and data types:
+  - river (object)
+  - station_id (object)
+  - model (object)
+  - examples (int64)
+  - MAE (float64)
+  - RMSE (float64)
+  - mean_error (float64)
+
+First 3 rows:
+river station_id             model  examples       MAE      RMSE  mean_error
+KLANG   2BKLG005       Persistence         4  5.250000  6.020797   -0.750000
+KLANG   2BKLG005 Linear Regression         4  6.891223  8.106697   -6.891223
+KLANG   2BKLG006       Persistence         4 15.750000 17.965244  -13.250000
+
+======================================================================
+FILE: walk_forward_predictions.csv
+======================================================================
+Rows: 88
+Columns: 8
+
+Column names and data types:
+  - river (object)
+  - station_id (object)
+  - sample_date (object)
+  - next_sample_date (object)
+  - actual_wqi (float64)
+  - persistence_prediction (float64)
+  - linear_prediction (float64)
+  - training_examples (int64)
+
+First 3 rows:
+river station_id sample_date next_sample_date  actual_wqi  persistence_prediction  linear_prediction  training_examples
+KLANG   2BKLG005  2024-03-11       2024-05-07        87.0                    95.0          86.405629                110
+KLANG   2BKLG006  2024-03-11       2024-05-07        70.0                    59.0          79.463768                110
+KLANG   2WKLG004  2024-03-19       2024-05-13        68.0                    62.0          71.525807                112
