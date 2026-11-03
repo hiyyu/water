@@ -1,6 +1,8 @@
 #!/usr/bin/env python3
 """Fetch DOE continuous river water quality (WQI) data for the dashboard's Live tab.
 
+Keeps only the states listed in WANTED_STATES (Johor, Kedah, Kelantan, Penang, Selangor).
+
 Source: the public JSON endpoints behind https://eqms.doe.gov.my/RQIMS/conti_river
   - mapcrwqm                     latest WQI for every continuous station (national)
   - datatrendchartcrwqm?stateid  roughly the last 7 days of hourly WQI for one state
@@ -28,7 +30,9 @@ from pathlib import Path
 import requests
 
 BASE_URL = "https://eqms.doe.gov.my/api3/publicportalrqims"
-STATE_IDS = range(1, 17)  # DOE state IDs; states with no continuous stations return nothing
+# Only these states are kept. DOE writes Penang as "P.Pinang"; the aliases cover other spellings.
+# To add a state later, add its name here (lower case, no spaces).
+WANTED_STATES = {"johor", "kedah", "kelantan", "ppinang", "pulaupinang", "penang", "selangor"}
 HEADERS = {
     "User-Agent": "water-quality-fyp-dashboard/1.0 (university final-year project; hourly polling)",
     "Accept": "application/json",
@@ -37,8 +41,13 @@ TIMEOUT = 20      # seconds per request
 RETRIES = 3
 PAUSE = 1.0       # seconds between state requests, to stay polite
 
-LATEST_COLS = ["station_id", "river", "location", "state", "datetime", "wqi", "status", "lat", "lon"]
+LATEST_COLS = ["station_id", "river", "location", "state", "datetime", "wqi", "status", "lat", "lon"]  # state_id is internal
 HISTORY_COLS = ["station_id", "datetime", "wqi"]
+
+
+def state_key(name) -> str:
+    """'P.Pinang' -> 'ppinang', 'Pulau Pinang' -> 'pulaupinang' (for matching WANTED_STATES)."""
+    return "".join(ch for ch in clean_text(name).lower() if ch.isalnum())
 
 
 def default_data_dir() -> Path:
@@ -111,6 +120,7 @@ def parse_latest(payload) -> list[dict]:
             "river": clean_text(r.get("RIVER_NAME")),
             "location": clean_text(r.get("LOCATION")),
             "state": clean_text(r.get("STATE_NAME")),
+            "state_id": clean_text(r.get("STATE_ID")),
             "datetime": stamp,
             "wqi": wqi,
             "status": status_from(r.get("WQI_RANGE"), wqi),
@@ -150,10 +160,12 @@ def write_csv(path: Path, columns: list[str], rows: list[dict]) -> None:
     tmp.replace(path)
 
 
-def merge_history(path: Path, new_rows: list[dict]) -> list[dict]:
-    """Old rows + new rows, one row per (station_id, datetime); newest value wins."""
+def merge_history(path: Path, new_rows: list[dict], drop_stations=frozenset()) -> list[dict]:
+    """Old rows + new rows, one row per (station_id, datetime); newest value wins.
+    Old rows of stations in `drop_stations` (states no longer wanted) are removed."""
     merged = {}
-    for r in read_csv(path) + new_rows:
+    old_rows = [r for r in read_csv(path) if r["station_id"] not in drop_stations]
+    for r in old_rows + new_rows:
         merged[(r["station_id"], r["datetime"])] = {
             "station_id": r["station_id"], "datetime": r["datetime"], "wqi": r["wqi"],
         }
@@ -177,13 +189,23 @@ def main() -> int:
         print("ERROR: no usable rows in mapcrwqm; leaving existing files untouched.", file=sys.stderr)
         return 1
 
+    # Keep only the wanted states (the national feed includes all of Malaysia).
+    excluded = {r["station_id"] for r in latest if state_key(r["state"]) not in WANTED_STATES}
+    latest = [r for r in latest if state_key(r["state"]) in WANTED_STATES]
+    if not latest:
+        print("ERROR: none of the wanted states appear in mapcrwqm; leaving existing files untouched.", file=sys.stderr)
+        return 1
+    state_ids = sorted({r["state_id"] for r in latest if r["state_id"]}, key=lambda x: (len(x), x))
+    print(f"Keeping {len(latest)} stations in {len({r['state'] for r in latest})} states (state ids {', '.join(state_ids)}).")
+
     # The latest snapshot is also a history point (duplicates are removed on merge).
     new_history = [{k: r[k] for k in HISTORY_COLS} for r in latest]
 
     states_ok = 0
-    for state_id in STATE_IDS:
+    for state_id in state_ids:
         try:
-            rows = parse_trend(get_json(f"datatrendchartcrwqm?stateid={state_id}", session))
+            rows = [x for x in parse_trend(get_json(f"datatrendchartcrwqm?stateid={state_id}", session))
+                    if x["station_id"] not in excluded]
         except RuntimeError as error:
             print(f"  warning: state {state_id} skipped: {error}", file=sys.stderr)
             continue
@@ -193,7 +215,7 @@ def main() -> int:
             print(f"  state {state_id}: {len(rows)} hourly rows")
         time.sleep(PAUSE)
 
-    history = merge_history(data_dir / "live_history.csv", new_history)
+    history = merge_history(data_dir / "live_history.csv", new_history, excluded)
 
     # All parsing and merging succeeded -> now it is safe to write.
     write_csv(data_dir / "live_latest.csv", LATEST_COLS, latest)
