@@ -92,12 +92,22 @@ function renderLive(){
   const checked=liveMeta&&liveMeta.fetched_at?liveTime(new Date(liveMeta.fetched_at)):'—';
   const newest=liveMeta&&liveMeta.newest_reading?liveTime(new Date(liveMeta.newest_reading+'+08:00')):'—';
   $('live-note').textContent='Source: DOE continuous water quality monitoring (MyEQMS), hourly WQI from automatic river-intake stations. These are different stations from the sampling stations used by the forecasting models and are not used for training. Last checked: '+checked+' · Newest reading: '+newest+' (Malaysia time).';
-  // map
-  const traces=liveStatuses.map(s=>{const g=rows.filter(r=>r.status===s);return{type:'scattergeo',mode:'markers',name:s,lon:g.map(r=>num(r.lon)),lat:g.map(r=>num(r.lat)),customdata:g.map(r=>r.station_id),
+  // map (OpenStreetMap tiles, no API token needed)
+  const faded=(hex,al)=>{const n=parseInt(hex.slice(1),16);return 'rgba('+(n>>16)+','+((n>>8)&255)+','+(n&255)+','+al+')'};
+  const pts=rows.filter(r=>num(r.lat)!==null&&num(r.lon)!==null);
+  const lats=pts.map(r=>num(r.lat)),lons=pts.map(r=>num(r.lon));
+  const mid=v=>v.length?(Math.min(...v)+Math.max(...v))/2:0;
+  const mapEl=$('live-map'),mw=mapEl.clientWidth||800,mh=mapEl.clientHeight||460;
+  const lonSpan=Math.max(lons.length?Math.max(...lons)-Math.min(...lons):0,.05),latSpan=Math.max(lats.length?Math.max(...lats)-Math.min(...lats):0,.05);
+  const zoom=Math.max(5,Math.min(11.5,Math.min(Math.log2(360*mw/(256*lonSpan*1.25)),Math.log2(180*mh/(256*latSpan*1.35)))));
+  const selRow=rows.find(r=>r.station_id===sel);
+  const ring=selRow?[{type:'scattermapbox',mode:'markers',lon:[num(selRow.lon)],lat:[num(selRow.lat)],marker:{color:'#0f2e3d',size:24},hoverinfo:'skip',showlegend:false}]:[];
+  const traces=ring.concat(liveStatuses.map(s=>{const g=rows.filter(r=>r.status===s);return{type:'scattermapbox',mode:'markers',name:s+' stations',lon:g.map(r=>num(r.lon)),lat:g.map(r=>num(r.lat)),customdata:g.map(r=>r.station_id),
     text:g.map(r=>'<b>'+safe(r.river)+'</b><br>'+safe(r.location)+'<br>WQI '+safe(r.wqi)+' ('+safe(r.status)+')<br>'+safe(r.datetime.replace('T',' ').slice(0,16))+(liveIsStale(r.datetime)?' · STALE':'')),hoverinfo:'text',
-    marker:{color:statusColor(s),size:g.map(r=>r.station_id===sel?18:11),opacity:g.map(r=>liveIsStale(r.datetime)?.4:.95),line:{color:g.map(r=>r.station_id===sel?'#17324a':'white'),width:g.map(r=>r.station_id===sel?3:1)}}}});
-  Plotly.react('live-map',traces,{margin:{t:5,l:5,r:5,b:5},legend:{orientation:'h',y:-.02},paper_bgcolor:'rgba(0,0,0,0)',font:{family:'Instrument Sans, system-ui',color:'#5b7482'},
-    geo:{scope:'asia',resolution:50,lonaxis:{range:[99,120]},lataxis:{range:[0.5,7.6]},showland:true,landcolor:'#dfe9ec',showcountries:true,countrycolor:'#b9cbd2',showocean:true,oceancolor:'rgba(0,0,0,0)',bgcolor:'rgba(0,0,0,0)'}},{responsive:true,displaylogo:false});
+    marker:{color:g.map(r=>liveIsStale(r.datetime)?faded(statusColor(s),.4):statusColor(s)),size:g.map(r=>r.station_id===sel?17:13)}}}));
+  Plotly.react('live-map',traces,{margin:{t:0,l:0,r:0,b:0},uirevision:$('live-state').value,paper_bgcolor:'rgba(0,0,0,0)',font:{family:'Instrument Sans, system-ui',color:'#0f2e3d'},
+    legend:{orientation:'h',x:.01,y:.02,xanchor:'left',yanchor:'bottom',bgcolor:'rgba(255,255,255,.92)'},
+    mapbox:{style:'open-street-map',center:{lat:mid(lats),lon:mid(lons)},zoom}},{responsive:true,displaylogo:false});
   if(!liveMapBound){liveMapBound=true;$('live-map').on('plotly_click',ev=>{const id=ev.points&&ev.points[0]&&ev.points[0].customdata;if(id){$('live-station').value=id;renderLive()}})}
   // trend for the selected station
   const info=liveLatest.find(r=>r.station_id===sel);
