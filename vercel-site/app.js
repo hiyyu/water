@@ -68,14 +68,25 @@ async function loadLive(){
     liveLatest=l;liveHistory=h;liveMeta=m;
     liveSelectOptions('live-state',unique(l.map(r=>r.state)).map(s=>[s,s]),true);
     refreshLiveStations();
+    updateWaterMood();
     if(!$('live').hidden)renderLive();
   }catch(e){
     $('live-note').textContent='Live data unavailable: '+e.message+'. The rest of the dashboard is unaffected.';
     console.error(e);
   }
 }
+function updateWaterMood(){
+  if(!window.WaterBG||!liveLatest.length)return;
+  const rows=liveRows(),fresh=rows.filter(r=>!liveIsStale(r.datetime)),use=fresh.length?fresh:rows;
+  const vals=use.map(r=>num(r.wqi)).filter(v=>v!==null);
+  if(!vals.length){WaterBG.setScore(null,'');return}
+  const avg=vals.reduce((a,b)=>a+b,0)/vals.length;
+  const scope=$('live-state').value==='All'?'all '+unique(rows.map(r=>r.state)).length+' states':$('live-state').value;
+  WaterBG.setScore(avg,scope+(fresh.length?'':' (stale data)'));
+}
 function renderLive(){
   if(!liveLatest.length)return;
+  updateWaterMood();
   const rows=liveRows(),sel=$('live-station').value;
   const checked=liveMeta&&liveMeta.fetched_at?liveTime(new Date(liveMeta.fetched_at)):'—';
   const newest=liveMeta&&liveMeta.newest_reading?liveTime(new Date(liveMeta.newest_reading+'+08:00')):'—';
