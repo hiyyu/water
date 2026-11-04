@@ -187,7 +187,7 @@ function drawMap(f){
     text:f.map(r=>'<b>'+esc(r.station_location)+'</b><br>Forecast WQI '+Number(r.predicted_wqi).toFixed(1)+'<br>'+esc(r.predicted_status)),
     marker:{size:15,color:f.map(r=>COLOR[r.predicted_status]||'#94a3b8'),opacity:.95}};
   Plotly.react('map',[trace],{margin:{t:0,l:0,r:0,b:0},paper_bgcolor:'rgba(0,0,0,0)',showlegend:false,
-    mapbox:{style:'carto-positron',center:{lat:mid(lat),lon:mid(lon)},zoom}},{responsive:true,displayModeBar:false});
+    mapbox:{style:'open-street-map',center:{lat:mid(lat),lon:mid(lon)},zoom}},{responsive:true,displayModeBar:false});
 }
 ['river','model'].forEach(id=>$(id).addEventListener('change',()=>{render();
   if($('river').value&&$('model').value)setTimeout(()=>$('results').scrollIntoView({behavior:'smooth'}),150)}));
