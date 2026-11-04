@@ -165,8 +165,9 @@ function render(){
   $('river-name').textContent='Sungai '+(river==='KLANG'?'Klang':'Skudai');
   $('badge').textContent=model;
   $('status').textContent=st;$('status').style.color=COLOR[st];
-  const forecastDate=f.map(r=>r.forecast_date.slice(0,10)).sort().at(-1);
-  $('meta').textContent='Average of '+f.length+' stations, estimated for the next sampling on '+forecastDate+'.';
+  const dates=f.map(r=>r.forecast_date.slice(0,10)).sort();
+  const range=dates[0]===dates.at(-1)?dates[0]:dates[0]+' to '+dates.at(-1);
+  $('meta').textContent='Forecast for the next sampling: '+range+'.';
   countTo(mean);drawMap(f);
 }
 
