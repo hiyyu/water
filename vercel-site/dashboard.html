@@ -88,9 +88,9 @@ h3.s{font:400 19px var(--serif);margin:0 0 4px}
 .river-head .st{font-weight:600;display:flex;align-items:center;gap:8px}.river-head .st::before{content:"";width:11px;height:11px;border-radius:50%;background:currentColor}
 .split{display:grid;grid-template-columns:minmax(0,1.4fr) minmax(0,1fr);gap:20px}
 .mapbox{height:380px;border-radius:12px;overflow:hidden;border:1px solid var(--line)}
-.params{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;align-content:start}
-.params div{background:rgba(255,255,255,.6);border:1px solid var(--line);border-radius:12px;padding:10px 14px}
-.params small{display:block;color:var(--mute);font-size:12px}.params b{font:700 22px var(--serif)}
+.params{display:block}
+.prow{display:flex;align-items:center;gap:14px;padding:11px 0;border-bottom:1px solid var(--line)}.prow:last-child{border-bottom:0}
+.prow i{width:12px;height:12px;border-radius:50%;flex:none}.prow .n{flex:1;font-weight:600}.prow small{display:block;color:var(--mute);font-size:12px;font-weight:400}.prow .v{text-align:right;font:700 18px var(--sans)}
 .chart{height:360px;width:100%}.grid3{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:16px}.grid3 .chart{height:300px}
 .scroll{overflow:auto;max-height:520px;border-top:1px solid var(--line)}
 table{border-collapse:collapse;width:100%;font-size:13px;font-variant-numeric:tabular-nums}
@@ -114,9 +114,9 @@ th{position:sticky;top:0;background:#eef6f3;color:var(--mute);font-weight:600;fo
 
 <section id="forecast">
  <div class="panel" id="p-SKUDAI"><h2>Sungai Skudai</h2><div class="river-head"><span class="big" id="s-SKUDAI">-</span><span class="st" id="t-SKUDAI"></span></div>
-  <div class="split"><div class="mapbox" id="m-SKUDAI"></div><div><h3 class="s">Water parameters</h3><p class="muted">Latest observed average. The models forecast WQI only, not individual parameters.</p><div class="params" id="pr-SKUDAI"></div></div></div></div>
+  <div class="split"><div class="mapbox" id="m-SKUDAI"></div><div><h3 class="s">Water parameters</h3><p class="muted" id="pc-SKUDAI">Loading</p><div class="params" id="pr-SKUDAI"></div></div></div></div>
  <div class="panel" id="p-KLANG"><h2>Sungai Klang</h2><div class="river-head"><span class="big" id="s-KLANG">-</span><span class="st" id="t-KLANG"></span></div>
-  <div class="split"><div class="mapbox" id="m-KLANG"></div><div><h3 class="s">Water parameters</h3><p class="muted">Latest observed average. The models forecast WQI only, not individual parameters.</p><div class="params" id="pr-KLANG"></div></div></div></div>
+  <div class="split"><div class="mapbox" id="m-KLANG"></div><div><h3 class="s">Water parameters</h3><p class="muted" id="pc-KLANG">Loading</p><div class="params" id="pr-KLANG"></div></div></div></div>
 </section>
 
 <section id="latest" hidden>
@@ -168,13 +168,16 @@ const model=()=>$('model').value;
 const fm=()=>F.filter(r=>r.model===model());
 
 /* ---- Tab 1 ---- */
-const PL=[['DO','DO','mg/L'],['BOD','BOD','mg/L'],['COD','COD','mg/L'],['SS','SS','mg/L'],['pH','pH',''],['NH3N','NH3-N','mg/L']];
+const PL=[['DO','DO','Dissolved oxygen','mg/L','Class III: 3-5'],['BOD','BOD','Biochemical oxygen demand','mg/L','Class III limit &le; 6'],['COD','COD','Chemical oxygen demand','mg/L','Class III limit &le; 50'],['NH3N','NH<sub>3</sub>-N','Ammoniacal nitrogen','mg/L','Class III limit &le; 0.9'],['SS','SS','Suspended solids','mg/L','Class III limit &le; 150'],['pH','pH','Acidity','','Class III: 5-9']];
+const siColor=v=>v==null?'#94a3b8':v>=81?'#3b8fd9':v>=60?'#d9a21b':'#d9574c';
 function rForecast(){
  ['SKUDAI','KLANG'].forEach(R=>{
   const f=fm().filter(r=>r.river===R&&COORDS[r.station_id]),v=mean(f.map(r=>r.predicted_wqi)),s=statusOf(v);
   $('s-'+R).textContent=f1(v);$('t-'+R).textContent=s||'';$('t-'+R).style.color=COLOR[s]||'';
   const p=PAR.filter(r=>r.river===R);
-  $('pr-'+R).innerHTML=PL.map(x=>{const m=mean(p.map(r=>r[x[0]]));return '<div><small>'+x[1]+(x[2]?' ('+x[2]+')':'')+'</small><b>'+(m==null?'-':m.toFixed(2))+'</b></div>'}).join('');
+  const dt=p.map(r=>d10(r.date)).sort().at(-1);
+  $('pc-'+R).textContent='Latest DOE sample, averaged over '+p.length+' station(s) (most recent '+(dt?new Date(dt).toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'numeric'}):'-')+'). Dot colour = DOE sub-index band.';
+  $('pr-'+R).innerHTML=PL.map(x=>{const m=mean(p.map(r=>r[x[0]])),si=mean(p.map(r=>r[x[0]+'_si']));return '<div class="prow"><i style="background:'+siColor(si)+'"></i><div class="n">'+x[1]+'<small>'+x[2]+'</small></div><div class="v">'+(m==null?'-':m.toFixed(2))+(x[3]?' '+x[3]:'')+'<small>'+x[4]+'</small></div></div>'}).join('')
   const lat=f.map(r=>COORDS[r.station_id][0]),lon=f.map(r=>COORDS[r.station_id][1]);
   Plotly.react('m-'+R,[{type:'scattermapbox',mode:'markers',lat,lon,hoverinfo:'text',text:f.map(r=>'<b>'+esc(r.station_location)+'</b><br>Forecast WQI '+f1(N(r.predicted_wqi))+'<br>'+esc(r.predicted_status)),marker:{size:15,color:f.map(r=>COLOR[r.predicted_status]||'#94a3b8')}}],mapLayout(lat,lon,$('m-'+R)),CFG)});
 }
