@@ -99,6 +99,17 @@ th{position:sticky;top:0;background:#eef6f3;color:var(--mute);font-weight:600;fo
 .pill{display:inline-flex;align-items:center;gap:7px;font-weight:600}.pill::before{content:"";width:8px;height:8px;border-radius:50%;background:currentColor}
 .note{padding:12px 16px;margin-bottom:20px;background:var(--glass);border-left:3px solid var(--slight);border-radius:0 12px 12px 0;color:#6b5a1c;font-size:13px;max-width:100ch}
 @media (max-width:820px){.cards,.split,.grid3{grid-template-columns:1fr}}
+
+nav.tabs{display:flex;gap:28px;padding:0;background:none;border:0;border-bottom:1px solid var(--line);border-radius:0;backdrop-filter:none}
+.tab{padding:10px 0;border-radius:0;border-bottom:2px solid transparent;margin-bottom:-1px}
+.tab.active{background:none;color:var(--ink);border-bottom-color:var(--lotus)}
+.filters{margin-top:20px}
+.split{align-items:stretch}.split .mapbox{height:auto;min-height:400px}
+.prow{padding:8px 0}
+.cards.two{grid-template-columns:repeat(3,minmax(0,1fr))}
+.grid2{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px;margin-bottom:6px}.grid2 .chart{height:340px}
+.best{background:rgba(201,118,155,.22);padding:2px 8px;border-radius:6px;font-weight:700}
+@media (max-width:820px){.grid2{grid-template-columns:1fr}nav.tabs{gap:18px}}
 </style></head>
 <body>
 <canvas id="pond" aria-hidden="true"></canvas>
@@ -113,9 +124,15 @@ th{position:sticky;top:0;background:#eef6f3;color:var(--mute);font-weight:600;fo
 </div>
 
 <section id="forecast">
- <div class="panel" id="p-SKUDAI"><h2>Sungai Skudai</h2><div class="river-head"><span class="big" id="s-SKUDAI">-</span><span class="st" id="t-SKUDAI"></span></div>
+ <div class="panel" id="p-SKUDAI"><h2>Sungai Skudai</h2>
+  <div class="cards"><div class="card"><small>Next-sampling forecast WQI</small><b id="s-SKUDAI">-</b><span id="sd-SKUDAI"></span></div>
+  <div class="card"><small>Predicted contamination risk</small><b id="t-SKUDAI" style="font-size:30px">-</b><span>Status of the average forecast</span></div>
+  <div class="card"><small>Latest observed WQI</small><b id="o-SKUDAI">-</b><span id="od-SKUDAI"></span></div></div>
   <div class="split"><div class="mapbox" id="m-SKUDAI"></div><div><h3 class="s">Water parameters</h3><p class="muted" id="pc-SKUDAI">Loading</p><div class="params" id="pr-SKUDAI"></div></div></div></div>
- <div class="panel" id="p-KLANG"><h2>Sungai Klang</h2><div class="river-head"><span class="big" id="s-KLANG">-</span><span class="st" id="t-KLANG"></span></div>
+ <div class="panel" id="p-KLANG"><h2>Sungai Klang</h2>
+  <div class="cards"><div class="card"><small>Next-sampling forecast WQI</small><b id="s-KLANG">-</b><span id="sd-KLANG"></span></div>
+  <div class="card"><small>Predicted contamination risk</small><b id="t-KLANG" style="font-size:30px">-</b><span>Status of the average forecast</span></div>
+  <div class="card"><small>Latest observed WQI</small><b id="o-KLANG">-</b><span id="od-KLANG"></span></div></div>
   <div class="split"><div class="mapbox" id="m-KLANG"></div><div><h3 class="s">Water parameters</h3><p class="muted" id="pc-KLANG">Loading</p><div class="params" id="pr-KLANG"></div></div></div></div>
 </section>
 
@@ -128,9 +145,9 @@ th{position:sticky;top:0;background:#eef6f3;color:var(--mute);font-weight:600;fo
 </section>
 
 <section id="evaluation" hidden>
- <div class="panel"><h2>Unified evaluation metrics</h2><p class="muted">Models were scored on different numbers of test samples (see n_samples), so these metrics are indicative, not a like-for-like ranking. Persistence (R&sup2; 0.64) is a strong baseline; plain LSTM and XGBoost scored below it on their smaller test sets.</p><div class="scroll"><table id="t-met"></table></div></div>
- <div class="grid3"><div class="panel"><h3 class="s">WQI regression accuracy (R&sup2;)</h3><div class="chart" id="c-r2"></div></div><div class="panel"><h3 class="s">Mean absolute error (MAE)</h3><div class="chart" id="c-mae"></div></div><div class="panel"><h3 class="s">Risk classification accuracy</h3><div class="chart" id="c-acc"></div></div></div>
- <div class="panel"><h2>Actual vs predicted WQI</h2><p class="muted">Historical out-of-sample evaluation records, not live readings.</p><div class="chart" id="c-sc"></div></div>
+ <div class="panel"><h2>Unified evaluation metrics</h2><p class="muted">Models were scored on different numbers of test samples (see n_samples), so these metrics are indicative, not a like-for-like ranking. Persistence (R&sup2; 0.64) is a strong baseline; plain LSTM and XGBoost scored below it on their smaller test sets. The best value in each column is highlighted.</p><div class="scroll"><table id="t-met"></table></div></div>
+ <div class="grid2"><div class="panel"><h3 class="s">WQI regression accuracy (R&sup2;)</h3><div class="chart" id="c-r2"></div></div><div class="panel"><h3 class="s">Mean absolute error (MAE)</h3><div class="chart" id="c-mae"></div></div></div>
+ <div class="grid2"><div class="panel"><h3 class="s">Contamination risk classification accuracy</h3><div class="chart" id="c-acc"></div></div><div class="panel"><h3 class="s">Actual vs predicted WQI</h3><p class="muted">Historical out-of-sample evaluation records, not live readings.</p><div class="chart" id="c-sc" style="height:300px"></div></div></div>
 </section>
 
 <section id="live" hidden>
@@ -172,12 +189,14 @@ const PL=[['DO','DO','Dissolved oxygen','mg/L','Class III: 3-5'],['BOD','BOD','B
 const siColor=v=>v==null?'#94a3b8':v>=81?'#3b8fd9':v>=60?'#d9a21b':'#d9574c';
 function rForecast(){
  ['SKUDAI','KLANG'].forEach(R=>{
-  const f=fm().filter(r=>r.river===R&&COORDS[r.station_id]),v=mean(f.map(r=>r.predicted_wqi)),s=statusOf(v);
-  $('s-'+R).textContent=f1(v);$('t-'+R).textContent=s||'';$('t-'+R).style.color=COLOR[s]||'';
-  const p=PAR.filter(r=>r.river===R);
-  const dt=p.map(r=>d10(r.date)).sort().at(-1);
+  const f=fm().filter(r=>r.river===R&&COORDS[r.station_id]),v=mean(f.map(r=>r.predicted_wqi)),st=statusOf(v);
+  const rng=k=>{const a=f.map(r=>d10(r[k])).sort();return a.length?(a[0]===a.at(-1)?a[0]:a[0]+' to '+a.at(-1)):'-'};
+  $('s-'+R).textContent=f1(v);$('sd-'+R).textContent='Forecast '+rng('forecast_date');
+  $('o-'+R).textContent=f1(mean(f.map(r=>r.last_observed_wqi)));$('od-'+R).textContent='Observed '+rng('last_observation_date');
+  $('t-'+R).textContent=st||'-';$('t-'+R).style.color=COLOR[st]||'';
+  const p=PAR.filter(r=>r.river===R),dt=p.map(r=>d10(r.date)).sort().at(-1);
   $('pc-'+R).textContent='Latest DOE sample, averaged over '+p.length+' station(s) (most recent '+(dt?new Date(dt).toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'numeric'}):'-')+'). Dot colour = DOE sub-index band.';
-  $('pr-'+R).innerHTML=PL.map(x=>{const m=mean(p.map(r=>r[x[0]])),si=mean(p.map(r=>r[x[0]+'_si']));return '<div class="prow"><i style="background:'+siColor(si)+'"></i><div class="n">'+x[1]+'<small>'+x[2]+'</small></div><div class="v">'+(m==null?'-':m.toFixed(2))+(x[3]?' '+x[3]:'')+'<small>'+x[4]+'</small></div></div>'}).join('')
+  $('pr-'+R).innerHTML=PL.map(x=>{const m=mean(p.map(r=>r[x[0]])),si=mean(p.map(r=>r[x[0]+'_si']));return '<div class="prow"><i style="background:'+siColor(si)+'"></i><div class="n">'+x[1]+'<small>'+x[2]+'</small></div><div class="v">'+(m==null?'-':m.toFixed(2))+(x[3]?' '+x[3]:'')+'<small>'+x[4]+'</small></div></div>'}).join('');
   const lat=f.map(r=>COORDS[r.station_id][0]),lon=f.map(r=>COORDS[r.station_id][1]);
   Plotly.react('m-'+R,[{type:'scattermapbox',mode:'markers',lat,lon,hoverinfo:'text',text:f.map(r=>'<b>'+esc(r.station_location)+'</b><br>Forecast WQI '+f1(N(r.predicted_wqi))+'<br>'+esc(r.predicted_status)),marker:{size:15,color:f.map(r=>COLOR[r.predicted_status]||'#94a3b8')}}],mapLayout(lat,lon,$('m-'+R)),CFG)});
 }
@@ -193,9 +212,12 @@ function rLatest(){
  tbl('t-fc',f,[['river','River'],['station_id','Station'],['station_location','Location'],['last_observation_date','Last observation',d10],['forecast_date','Forecast date',d10],['last_observed_wqi','Observed WQI',(v,r)=>pill(r.last_observed_status)+' '+f1(N(v))],['predicted_wqi','Forecast WQI',f1],['predicted_status','Estimated status',pill]]);
 }
 /* ---- Tab 3 ---- */
+const MC=['#6bb3a6','#d98fae','#e8b86a','#8aa7d9','#b39ad9','#7fbf8a'];
 function rEval(){
- const ms=M.map(r=>r.model),bar=(id,key,mul,title)=>Plotly.react(id,[{type:'bar',x:ms,y:M.map(r=>N(r[key])*mul),marker:{color:'#6bb3a6'},hovertemplate:'%{x}<br>%{y:.2f}<extra></extra>'}],base({yaxis:{title,gridcolor:GRID},margin:{t:10,l:48,r:10,b:90}}),CFG);
- tbl('t-met',M,[['model','Model'],['n_samples','n_samples'],['MAE','MAE',f2],['RMSE','RMSE',f2],['R2','R&sup2;',f2],['accuracy','Accuracy',f2],['balanced_accuracy','Balanced accuracy',f2],['macro_f1','Macro F1',f2]]);
+ const ms=M.map(r=>r.model),col=M.map((_,i)=>MC[i%MC.length]);
+ const bar=(id,key,mul,title)=>Plotly.react(id,[{type:'bar',x:ms,y:M.map(r=>N(r[key])*mul),marker:{color:col},text:M.map(r=>(N(r[key])*mul).toFixed(2)),textposition:'outside',cliponaxis:false,hovertemplate:'%{x}<br>%{y:.2f}<extra></extra>'}],base({yaxis:{title,gridcolor:GRID},xaxis:{automargin:true,tickangle:-25},margin:{t:24,l:52,r:10,b:20}}),CFG);
+ const hi=(k,min)=>{const a=M.map(r=>N(r[k])).filter(x=>x!==null),b=min?Math.min(...a):Math.max(...a);return v=>N(v)===b?'<span class="best">'+f2(v)+'</span>':f2(v)};
+ tbl('t-met',M,[['model','Model'],['n_samples','n_samples'],['MAE','MAE',hi('MAE',1)],['RMSE','RMSE',hi('RMSE',1)],['R2','R&sup2;',hi('R2')],['accuracy','Accuracy',hi('accuracy')],['balanced_accuracy','Balanced accuracy',hi('balanced_accuracy')],['macro_f1','Macro F1',hi('macro_f1')]]);
  bar('c-r2','R2',1,'R&sup2;');bar('c-mae','MAE',1,'MAE (WQI points)');bar('c-acc','accuracy',100,'Accuracy (%)');
  const h=P.filter(r=>r.model===model());
  Plotly.react('c-sc',[{type:'scatter',mode:'markers',name:model(),x:h.map(r=>N(r.actual_wqi)),y:h.map(r=>N(r.predicted_wqi)),text:h.map(r=>r.station_id),marker:{size:8,opacity:.7,color:h.map(r=>wc(N(r.actual_wqi)))}},{type:'scatter',mode:'lines',name:'Perfect prediction',x:[0,100],y:[0,100],line:{dash:'dash',color:'#94a3b8'}}],base({xaxis:{title:'Actual WQI',range:[0,105],gridcolor:GRID},yaxis:{title:'Predicted WQI',range:[0,105],gridcolor:GRID}}),CFG);
@@ -207,7 +229,7 @@ const lt=d=>d.toLocaleString('en-MY',{timeZone:'Asia/Kuala_Lumpur',day:'numeric'
 const lrows=()=>LL.filter(r=>$('l-state').value==='All'||r.state===$('l-state').value);
 function fillSel(id,pairs,all){const el=$(id),p=el.value;el.innerHTML=(all?'<option value="All">All states</option>':'')+pairs.map(x=>'<option value="'+esc(x[0])+'">'+esc(x[1])+'</option>').join('');if([...el.options].some(o=>o.value===p))el.value=p}
 function stations(){const r=lrows(),p=$('l-station').value;fillSel('l-station',r.map(x=>[x.station_id,x.station_id+' - '+x.river+' ('+x.state+')']));if(!p||![...$('l-station').options].some(o=>o.value===p)){const fav=r.find(x=>/skudai|klang/i.test(x.river));if(fav)$('l-station').value=fav.station_id}}
-async function loadLive(){try{[LL,LH,LM]=await Promise.all([csv('live_latest.csv'),csv('live_history.csv'),csv('live_meta.json',true)]);fillSel('l-state',uniq(LL.map(r=>r.state)).map(s=>[s,s]),true);stations();if(cur==='live')rLive()}catch(e){$('l-note').textContent='Live data unavailable: '+e.message}}
+async function loadLive(){try{[LL,LH,LM]=await Promise.all([csv('live_latest.csv'),csv('live_history.csv'),csv('live_meta.json',true)]);const first=!$('l-state').options.length;fillSel('l-state',uniq(LL.map(r=>r.state)).map(s=>[s,s]),true);if(first&&[...$('l-state').options].some(o=>o.value==='Johor'))$('l-state').value='Johor';stations();if(cur==='live')rLive()}catch(e){$('l-note').textContent='Live data unavailable: '+e.message}}
 function rLive(){
  if(!LL.length)return;const rows=lrows(),sel=$('l-station').value;
  $('l-note').textContent='Source: DOE continuous water quality monitoring (MyEQMS), hourly WQI from automatic river-intake stations. These are different stations from the sampling stations used by the forecasting models and are not used for training. Last checked: '+(LM?.fetched_at?lt(new Date(LM.fetched_at)):'-')+' · Newest reading: '+(LM?.newest_reading?lt(new Date(LM.newest_reading+'+08:00')):'-')+' (Malaysia time).';
