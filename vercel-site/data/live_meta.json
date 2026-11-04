@@ -1,7 +1,7 @@
 {
-  "fetched_at": "2026-11-03T23:57:36Z",
-  "newest_reading": "2026-11-04T04:00:00",
+  "fetched_at": "2026-11-04T06:04:55Z",
+  "newest_reading": "2026-11-04T10:00:00",
   "stations": 14,
-  "history_rows": 2302,
+  "history_rows": 2400,
   "states_with_trend": 5
 }
