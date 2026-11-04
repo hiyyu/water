@@ -6,6 +6,7 @@
 <title>Water Quality Index &amp; Contamination Risk</title>
 <link rel="preconnect" href="https://fonts.googleapis.com"/><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Alice&family=Instrument+Sans:wght@400;500;600&display=swap"/>
+<link rel="icon" type="image/png" href="/character.png">
 <script src="https://cdn.plot.ly/plotly-2.35.2.min.js" defer></script>
 <script src="https://cdn.jsdelivr.net/npm/papaparse@5.5.3/papaparse.min.js" defer></script>
 <style>
@@ -68,6 +69,18 @@ footer{background:rgba(255,255,255,.55);backdrop-filter:blur(8px);border-top:1px
 .cols a{display:block;color:var(--mute);text-decoration:none;font-size:14px;padding:3px 0}
 .cols a:hover{color:#a4557a}
 .fine{max-width:1120px;margin:32px auto 0;font-size:12px;color:var(--mute)}
+
+.map-wrap,.readout{opacity:0;transition:opacity .9s ease,transform .9s cubic-bezier(.2,.7,.2,1)}
+.map-wrap{transform:translateX(-90px)}
+.readout{transform:translateX(90px);transition-delay:.15s}
+.results.in .map-wrap,.results.in .readout{opacity:1;transform:none}
+
+.journey h2,.path{filter:blur(10px)}
+.journey h2{opacity:0;transition:opacity .8s,filter .8s}
+.journey h2.in{opacity:1;filter:blur(0)}
+.path{transition:opacity .8s,transform .8s,filter .8s,color .2s,padding-left .25s}
+.path.fade-in{filter:blur(0)}
+
 @media (max-width:820px){.results-grid,.journey-grid{grid-template-columns:1fr}.journey h2{position:static;margin-bottom:8px}}
 </style>
 </head>
@@ -197,6 +210,8 @@ addEventListener('load',load);
 /* ===== Scroll reveal for "I want to..." ===== */
 const io=new IntersectionObserver(es=>es.forEach(e=>{if(e.isIntersecting){e.target.classList.add('fade-in');io.unobserve(e.target)}}),{threshold:.35});
 document.querySelectorAll('.path').forEach(el=>io.observe(el));
+const io2=new IntersectionObserver(es=>es.forEach(e=>{if(e.isIntersecting){e.target.classList.add('in');io2.unobserve(e.target)}}),{threshold:.25});
+document.querySelectorAll('.results,.journey h2').forEach(el=>io2.observe(el));
 
 /* ===== ASCII pond: fixed behind the whole page ===== */
 (()=>{
