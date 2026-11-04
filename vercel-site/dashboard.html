@@ -137,7 +137,7 @@ nav.tabs{display:flex;flex-wrap:wrap;gap:0;margin:0;padding:0;border:0;overflow:
 
 <section id="forecast">
  <div class="panel" id="p-SKUDAI"><h2>Sungai Skudai</h2>
-  <div class="fc"><div class="fc-l"><div class="cards"><div class="card"><small></small><b id="s-SKUDAI">-</b><span id="sd-SKUDAI"></span></div>
+  <div class="fc"><div class="fc-l"><div class="cards"><div class="card"><small>Next-sampling forecast WQI</small><b id="s-SKUDAI">-</b><span id="sd-SKUDAI"></span></div>
   <div class="card"><small>Predicted contamination risk</small><b id="t-SKUDAI" style="font-size:34px">-</b><span>Status of the average forecast</span></div></div>
   <div class="mapbox" id="m-SKUDAI"></div></div>
   <div class="fc-r"><h3 class="s">Water parameters</h3><p class="muted" id="pc-SKUDAI">Loading</p><div class="params" id="pr-SKUDAI"></div></div></div></div>
@@ -230,7 +230,7 @@ function rEval(){
  const hi=(k,min)=>{const a=M.map(r=>N(r[k])).filter(x=>x!==null),b=min?Math.min(...a):Math.max(...a);return v=>N(v)===b?'<span class="best">'+f2(v)+'</span>':f2(v)};
  tbl('t-met',M,[['model','Model'],['n_samples','n_samples'],['MAE','MAE',hi('MAE',1)],['RMSE','RMSE',hi('RMSE',1)],['R2','R&sup2;',hi('R2')],['accuracy','Accuracy',hi('accuracy')],['balanced_accuracy','Balanced accuracy',hi('balanced_accuracy')],['macro_f1','Macro F1',hi('macro_f1')]]);
  bar('c-r2','R2',1,'R&sup2;');bar('c-mae','MAE',1,'MAE (WQI points)');bar('c-acc','accuracy',100,'Accuracy (%)');
- const tr=M.map((m,i)=>{const h=P.filter(r=>r.model===m.model);return{type:'scatter',mode:'markers',name:m.model,x:h.map(r=>N(r.actual_wqi)),y:h.map(r=>N(r.predicted_wqi)),text:h.map(r=>r.station_id),marker:{size:7,opacity:.65,color:MC[i%MC.length]}}});
+ const tr=M.map((m,i)=>{const h=P.filter(r=>r.model===m.model);return{type:'scatter',mode:'markers',name:m.model,x:h.map(r=>N(r.actual_wqi)),y:h.map(r=>N(r.predicted_wqi)),text:h.map(r=>r.station_id),marker:{size:7,opacity:.65,color:MC[i%MC.length]}}}).filter(t=>t.name===model());
  tr.push({type:'scatter',mode:'lines',name:'Perfect prediction',x:[0,100],y:[0,100],line:{dash:'dash',color:'#94a3b8'}});
  Plotly.react('c-sc',tr,base({xaxis:{title:'Actual WQI',range:[0,105],gridcolor:GRID},yaxis:{title:'Predicted WQI',range:[0,105],gridcolor:GRID}}),CFG);
 }
@@ -259,7 +259,7 @@ function rLive(){
 const R={forecast:rForecast,latest:rLatest,evaluation:rEval,live:rLive};
 function show(t){cur=t;document.querySelectorAll('.tab').forEach(b=>b.classList.toggle('active',b.dataset.tab===t));
  Object.keys(R).forEach(id=>$(id).hidden=id!==t);
- $('f-main').style.display=(t==='live'||t==='evaluation')?'none':'';$('l-river').style.display=t==='latest'?'':'none';
+$('f-main').style.display=t==='live'?'none':'';
  setTimeout(R[t],30)}
 document.querySelectorAll('.tab').forEach(b=>b.addEventListener('click',()=>{location.hash=b.dataset.tab;show(b.dataset.tab)}));
 ['model','river'].forEach(id=>$(id).addEventListener('change',()=>R[cur]()));
