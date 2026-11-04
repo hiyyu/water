@@ -1,3 +1,256 @@
 <!doctype html>
-<html lang="en"><head><meta charset="utf-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/><title>Water Quality | Klang & Skudai</title><link rel="preconnect" href="https://fonts.googleapis.com"/><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,700&family=Instrument+Sans:wght@400;500;600;700&display=swap"/><link rel="stylesheet" href="/style.css"/><script src="https://cdn.plot.ly/plotly-2.35.2.min.js" defer></script><script src="https://cdn.jsdelivr.net/npm/papaparse@5.5.3/papaparse.min.js" defer></script><script src="/app.js" defer></script></head>
-<body><main class="shell"><header><div class="brand"><svg class="drop" viewBox="0 0 44 44" aria-hidden="true"><path d="M22 4C22 4 9 19 9 28a13 13 0 0026 0C35 19 22 4 22 4z" fill="currentColor" opacity=".16"/><path d="M22 4C22 4 9 19 9 28a13 13 0 0026 0C35 19 22 4 22 4z" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linejoin="round"/><path d="M15 29c3-2 5 2 7 0s4-2 7 0" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></svg><div><h1>Water Quality Intelligence</h1><p>River water quality for Klang and Skudai: DOE records, experimental forecasts and live monitoring.</p></div></div><span class="chip">Research prototype</span></header><nav><button class="tab active" data-tab="forecast">Water Quality Forecast</button><button class="tab" data-tab="evaluation">Model Evaluation</button><button class="tab" data-tab="live">Live Monitoring</button></nav><section class="filters" id="filters"><label>River<select id="river"><option value="All">Both rivers</option></select></label><label>Station<select id="station"><option value="All">All stations</option></select></label><label>Model<select id="model"></select></label></section><section id="forecast"><div class="note" id="freshness"></div><div class="metrics"><article><small>Dashboard date</small><strong id="today">—</strong><span>Not a live sensor reading</span></article><article><small>Latest observed WQI</small><strong id="observed">—</strong><span id="observed-date">Historical DOE data</span></article><article><small>Next-sampling WQI estimate</small><strong id="predicted">—</strong><span id="predicted-date">Saved model output</span></article><article><small>Predicted water status</small><strong id="status">—</strong><span>Derived from predicted WQI</span></article></div><div class="panel"><h2>Latest observed vs next-sampling forecast</h2><p class="muted">Station-level model outputs; not verified daily measurements.</p><div id="compare-chart" class="chart"></div></div><div class="panel"><h2>7-day outlook · experimental illustration</h2><p class="muted">The model was trained on roughly 2-month sampling intervals. This panel carries forward the saved next-sampling estimate; it is <b>not</b> a validated seven-day prediction.</p><div id="outlook-chart" class="chart"></div></div><div class="panel"><h2>Station forecasts</h2><div class="table-scroll"><table id="forecast-table"></table></div></div></section><section id="evaluation" hidden><div class="panel"><h2>Model evaluation</h2><p class="muted">Results are loaded from saved evaluation outputs. Different models may use different evaluation sample counts.</p><div class="table-scroll"><table id="metrics-table"></table></div></div><div class="panel"><h2>Actual vs predicted WQI</h2><p class="muted">Historical out-of-sample evaluation records, not live readings.</p><div id="evaluation-chart" class="chart"></div></div></section><section id="live" hidden><div class="note" id="live-note">Loading live data…</div><div class="filters"><label>State<select id="live-state"></select></label><label>Station<select id="live-station"></select></label></div><div class="panel"><h2>Live station map</h2><p class="muted">Click a station to see its trend. Faded markers are stale readings.</p><div id="live-map" class="chart" style="height:460px"></div></div><div class="panel"><h2>Hourly WQI trend</h2><p class="muted" id="live-trend-sub"></p><div id="live-chart" class="chart"></div></div><div class="panel"><h2>Latest readings</h2><div class="table-scroll"><table id="live-table"></table></div></div></section><footer>FYP research dashboard · Forecast data through 2024 · Live tab: DOE continuous monitoring, hourly · Predictions are experimental and should not be used for environmental safety decisions.</footer></main></body></html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>Water Quality Index &amp; Contamination Risk</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"/><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Alice&family=Instrument+Sans:wght@400;500;600&display=swap"/>
+<script src="https://cdn.plot.ly/plotly-2.35.2.min.js" defer></script>
+<script src="https://cdn.jsdelivr.net/npm/papaparse@5.5.3/papaparse.min.js" defer></script>
+<style>
+:root{
+  --ink:#1d4a44; --mute:#4d726b; --line:rgba(29,74,68,.14); --glass:rgba(255,255,255,.66);
+  --lotus:#c9769b; --clean:#3b8fd9; --slight:#d9a21b; --polluted:#d9574c;
+  --serif:"Alice",Georgia,serif; --sans:"Instrument Sans",system-ui,-apple-system,"Segoe UI",sans-serif;
+}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{margin:0;color:var(--ink);font:400 16px/1.55 var(--sans);-webkit-font-smoothing:antialiased;
+  background:linear-gradient(180deg,#e3f1ed 0%,#eaf4f1 45%,#f4f1ee 100%) fixed}
+a{color:inherit}
+:focus-visible{outline:2px solid var(--lotus);outline-offset:3px;border-radius:4px}
+@media (prefers-reduced-motion:reduce){html{scroll-behavior:auto}*{transition:none!important}}
+#pond{position:fixed;inset:0;width:100%;height:100%;z-index:0;pointer-events:none}
+main,footer{position:relative;z-index:1}
+
+.hero{min-height:100svh;display:grid;place-items:center}
+.hero-inner{width:min(860px,100% - 40px);text-align:center;padding:60px 0}
+h1{font:700 clamp(34px,6vw,62px)/1.12 var(--serif);letter-spacing:-.01em;margin:0 0 18px}
+.sub{color:var(--mute);max-width:52ch;margin:0 auto 32px}
+.controls{display:flex;gap:12px;justify-content:center;flex-wrap:wrap}
+.controls label{display:flex;flex-direction:column;gap:6px;text-align:left;font-size:13px;color:var(--mute);min-width:210px}
+select{appearance:none;-webkit-appearance:none;font:500 15px var(--sans);color:var(--ink);cursor:pointer;
+  padding:12px 40px 12px 16px;border-radius:999px;border:1px solid var(--line);background:rgba(255,255,255,.8) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' fill='none' stroke='%23c9769b' stroke-width='2'%3E%3Cpath d='M1 1.5l5 5 5-5'/%3E%3C/svg%3E") no-repeat right 16px center;backdrop-filter:blur(6px);box-shadow:0 4px 18px rgba(29,74,68,.08)}
+select:hover{border-color:rgba(201,118,155,.6)}
+
+.results{padding:clamp(56px,9vw,110px) 20px;min-height:100svh;display:grid;align-items:center}
+.results-grid{max-width:1120px;margin:auto;width:100%;display:grid;grid-template-columns:minmax(0,1.5fr) minmax(0,1fr);gap:clamp(24px,4vw,56px);align-items:stretch}
+.map-wrap{border:1px solid var(--line);border-radius:18px;overflow:hidden;background:var(--glass);backdrop-filter:blur(8px);display:flex;flex-direction:column;min-height:440px;box-shadow:0 10px 40px rgba(29,74,68,.08)}
+#map{flex:1;min-height:380px}
+.legend{display:flex;gap:20px;flex-wrap:wrap;padding:12px 18px;border-top:1px solid var(--line);font-size:13px;color:var(--mute)}
+.dot{display:inline-block;width:10px;height:10px;border-radius:50%;margin-right:7px}
+.readout{display:flex;flex-direction:column;justify-content:center;gap:6px}
+.river{font:400 22px var(--serif);color:var(--mute);margin:0}
+.score{font:700 clamp(84px,12vw,148px)/1 var(--serif);letter-spacing:-.03em;font-variant-numeric:tabular-nums;margin:0}
+.status{font:600 22px var(--sans);margin:0 0 14px;display:flex;align-items:center;gap:10px}
+.status::before{content:"";width:12px;height:12px;border-radius:50%;background:currentColor}
+.badge{align-self:flex-start;border:1px solid var(--lotus);background:rgba(255,255,255,.6);border-radius:999px;padding:6px 16px;font:600 14px var(--sans);color:#a4557a}
+.meta{margin-top:18px;font-size:13px;color:var(--mute);max-width:44ch}
+
+.journey{padding:clamp(40px,8vw,100px) 20px}
+.journey-grid{max-width:1120px;margin:auto;display:grid;grid-template-columns:minmax(0,1fr) minmax(0,2fr);gap:32px}
+.journey h2{font:400 clamp(30px,4vw,44px)/1.1 var(--serif);margin:0;position:sticky;top:38vh;align-self:start}
+.paths{display:flex;flex-direction:column}
+.path{display:block;text-decoration:none;font:400 clamp(26px,3.6vw,44px)/1.2 var(--serif);padding:clamp(28px,6vw,64px) 0;border-bottom:1px solid var(--line);
+  opacity:0;transform:translateY(40px);transition:opacity .7s,transform .7s,color .2s,padding-left .25s}
+.path.fade-in{opacity:1;transform:none}
+.path:hover,.path:focus-visible{color:#a4557a;padding-left:14px}
+.path small{display:block;font:400 14px var(--sans);color:var(--mute);margin-top:8px;max-width:48ch}
+
+footer{background:rgba(255,255,255,.55);backdrop-filter:blur(8px);border-top:1px solid var(--line);padding:44px 20px 32px}
+.foot{max-width:1120px;margin:auto;display:flex;justify-content:space-between;gap:32px;flex-wrap:wrap}
+.collab{display:flex;align-items:center;gap:14px}
+.collab p{margin:0;font-size:13px;color:var(--mute)}
+.collab strong{display:block;color:var(--ink);font-weight:600;font-size:15px}
+.cols{display:flex;gap:clamp(32px,8vw,96px)}
+.cols h3{font:400 17px var(--serif);margin:0 0 10px}
+.cols a{display:block;color:var(--mute);text-decoration:none;font-size:14px;padding:3px 0}
+.cols a:hover{color:#a4557a}
+.fine{max-width:1120px;margin:32px auto 0;font-size:12px;color:var(--mute)}
+@media (max-width:820px){.results-grid,.journey-grid{grid-template-columns:1fr}.journey h2{position:static;margin-bottom:8px}}
+</style>
+</head>
+<body>
+<canvas id="pond" aria-hidden="true"></canvas>
+<main>
+<header class="hero">
+  <div class="hero-inner">
+    <h1>Prediction of Water Quality Index &amp; Contamination Risk Using Machine Learning</h1>
+    <p class="sub">Forecasts for the Klang and Skudai rivers, built from Department of Environment sampling records.</p>
+    <div class="controls">
+      <label>Select river
+        <select id="river"><option value="" disabled selected>Choose a river</option><option value="SKUDAI">Sungai Skudai</option><option value="KLANG">Sungai Klang</option></select>
+      </label>
+      <label>Select model
+        <select id="model">
+          <option value="" disabled selected>Choose a model</option>
+          <option>CEEMDAN</option><option>LSTM</option><option>XGBoost</option><option>CEEMDAN-LSTM</option>
+          <option>CEEMDAN-LSTM-XGBoost</option>
+        </select>
+      </label>
+    </div>
+  </div>
+</header>
+
+<section class="results" id="results" aria-live="polite">
+  <div class="results-grid">
+    <div class="map-wrap">
+      <div id="map" role="img" aria-label="Map of monitoring stations coloured by forecast status"></div>
+      <div class="legend">
+        <span><i class="dot" style="background:var(--clean)"></i>Clean</span>
+        <span><i class="dot" style="background:var(--slight)"></i>Slightly polluted</span>
+        <span><i class="dot" style="background:var(--polluted)"></i>Polluted</span>
+      </div>
+    </div>
+    <div class="readout">
+      <p class="river" id="river-name">Sungai Skudai</p>
+      <p class="score" id="score">--</p>
+      <p class="status" id="status">Loading</p>
+      <span class="badge" id="badge">CEEMDAN-LSTM-XGBoost</span>
+      <p class="meta" id="meta"></p>
+    </div>
+  </div>
+</section>
+
+<section class="journey" aria-labelledby="want">
+  <div class="journey-grid">
+    <h2 id="want">I want to&hellip;</h2>
+    <nav class="paths">
+      <a class="path" href="/dashboard#forecast">Observe water quality forecast<small>Station-by-station WQI estimates for the next sampling date.</small></a>
+      <a class="path" href="/dashboard#forecast">Compare latest observed with next-sampling forecast<small>See which stations are expected to improve or worsen.</small></a>
+      <a class="path" href="/dashboard#evaluation">Compare machine learning model evaluation<small>MAE, RMSE, R&sup2; and risk-class accuracy for every model.</small></a>
+      <a class="path" href="/dashboard#live">Do live monitoring<small>Hourly readings from DOE automatic stations.</small></a>
+    </nav>
+  </div>
+</section>
+</main>
+
+<footer>
+  <div class="foot">
+    <div class="collab">
+      <svg width="52" height="52" viewBox="0 0 52 52" aria-hidden="true"><path d="M4 18C14 6 38 6 48 18L26 48Z" fill="none" stroke="#9db8b1" stroke-width="2" stroke-linejoin="round"/><path d="M12 20c8-6 20-6 28 0" fill="none" stroke="#9db8b1" stroke-width="2"/></svg>
+      <p>In collaboration with<strong>Department of Environment Malaysia</strong></p>
+    </div>
+    <div class="cols">
+      <div><h3>About</h3><a href="/about">About us</a><a href="/contact">Contact us</a></div>
+      <div><h3>Portal</h3><a href="/dashboard">Dashboard</a><a href="/docs">Model documentation</a></div>
+    </div>
+  </div>
+  <p class="fine">Final year project research prototype. Forecasts are saved next-sampling model outputs based on data through 2024 and should not be used for environmental safety decisions.</p>
+</footer>
+
+<script>
+/* ===== Station coordinates (from outputs/combined_doe_dataset.csv) ===== */
+const COORDS={"2BKLG005":[3.232191,101.750134],"2BKLG006":[3.206971,101.755936],"2BKLG016":[3.016563,101.376878],"2BKLG022":[3.045897,101.446625],"2BKLG023":[3.042362,101.472604],"2BKLG024":[3.029567,101.550903],"2BKLG034":[3.020628,101.596586],"2BKLG050":[3.038944,101.534036],"2WKLG001":[3.082549,101.664382],"2WKLG002":[3.138222,101.694807],"2WKLG003":[3.155487,101.701133],"2WKLG004":[3.12083,101.676438],"2WKLG049":[3.164633,101.73497],"3JSKU001":[1.500322,103.683419],"3JSKU002":[1.519387,103.677122],"3JSKU003":[1.555154,103.660858],"3JSKU004":[1.684808,103.572752],"3JSKU005":[1.662678,103.604485],"3JSKU006":[1.63204,103.63651],"3JSKU007":[1.62168,103.655247],"3JSKU010":[1.668734,103.589723],"3JSKU011":[1.692786,103.514711]};
+const COLOR={Clean:'#3b8fd9','Slightly Polluted':'#d9a21b',Polluted:'#d9574c'};
+const statusOf=v=>v>=81?'Clean':v>=60?'Slightly Polluted':'Polluted';
+const $=id=>document.getElementById(id);
+const esc=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+let rows=[],shown=null,tween=0;
+
+async function load(){
+  try{
+    const t=await (await fetch('/data/all_models_latest_forecasts.csv')).text();
+    rows=Papa.parse(t,{header:true,skipEmptyLines:true}).data;
+    render();
+  }catch(e){$('status').textContent='Forecast data unavailable';$('meta').textContent=e.message}
+}
+
+function render(){
+  const river=$('river').value||'SKUDAI',model=$('model').value||'CEEMDAN-LSTM-XGBoost';
+  const f=rows.filter(r=>r.river===river&&r.model===model&&COORDS[r.station_id]);
+  if(!f.length)return;
+  const mean=f.reduce((a,r)=>a+Number(r.predicted_wqi),0)/f.length,st=statusOf(mean);
+  $('river-name').textContent='Sungai '+(river==='KLANG'?'Klang':'Skudai');
+  $('badge').textContent=model;
+  $('status').textContent=st;$('status').style.color=COLOR[st];
+  const forecastDate=f.map(r=>r.forecast_date.slice(0,10)).sort().at(-1);
+  $('meta').textContent='Average of '+f.length+' stations, estimated for the next sampling on '+forecastDate+'.';
+  countTo(mean);drawMap(f);
+}
+
+function countTo(v){
+  cancelAnimationFrame(tween);
+  const from=shown??v,t0=performance.now(),reduce=matchMedia('(prefers-reduced-motion:reduce)').matches;
+  const step=t=>{const k=reduce?1:Math.min(1,(t-t0)/600),e=1-Math.pow(1-k,3);
+    $('score').textContent=(from+(v-from)*e).toFixed(2);if(k<1)tween=requestAnimationFrame(step);else shown=v};
+  tween=requestAnimationFrame(step);
+}
+
+function drawMap(f){
+  const lat=f.map(r=>COORDS[r.station_id][0]),lon=f.map(r=>COORDS[r.station_id][1]);
+  const mid=a=>(Math.min(...a)+Math.max(...a))/2,span=a=>Math.max(...a)-Math.min(...a);
+  const w=$('map').clientWidth||600,h=$('map').clientHeight||400;
+  const zoom=Math.min(12,Math.log2(Math.min(360*w/(256*span(lon)*1.35),180*h/(256*span(lat)*1.5))));
+  const trace={type:'scattermapbox',mode:'markers',lat,lon,hoverinfo:'text',
+    text:f.map(r=>'<b>'+esc(r.station_location)+'</b><br>Forecast WQI '+Number(r.predicted_wqi).toFixed(1)+'<br>'+esc(r.predicted_status)),
+    marker:{size:15,color:f.map(r=>COLOR[r.predicted_status]||'#94a3b8'),opacity:.95}};
+  Plotly.react('map',[trace],{margin:{t:0,l:0,r:0,b:0},paper_bgcolor:'rgba(0,0,0,0)',showlegend:false,
+    mapbox:{style:'carto-positron',center:{lat:mid(lat),lon:mid(lon)},zoom}},{responsive:true,displayModeBar:false});
+}
+['river','model'].forEach(id=>$(id).addEventListener('change',()=>{render();
+  if($('river').value&&$('model').value)setTimeout(()=>$('results').scrollIntoView({behavior:'smooth'}),150)}));
+addEventListener('load',load);
+
+/* ===== Scroll reveal for "I want to..." ===== */
+const io=new IntersectionObserver(es=>es.forEach(e=>{if(e.isIntersecting){e.target.classList.add('fade-in');io.unobserve(e.target)}}),{threshold:.35});
+document.querySelectorAll('.path').forEach(el=>io.observe(el));
+
+/* ===== ASCII pond: fixed behind the whole page ===== */
+(()=>{
+  const cv=$('pond'),ctx=cv.getContext('2d'),CH=' .  ..,:;',FS=16,CW=FS*.6,LH=FS*1.1;
+  const reduce=matchMedia('(prefers-reduced-motion:reduce)').matches;
+  const BODY=['@','O','o','o','*','+','-','.','.'];
+  let W,H,cols,rws,t=0,ripples=[],kois=[],lotus=[];
+  const R=(a,b)=>a+Math.random()*(b-a);
+  function size(){
+    const d=Math.min(devicePixelRatio||1,2);W=innerWidth;H=innerHeight;cv.width=W*d;cv.height=H*d;ctx.setTransform(d,0,0,d,0,0);
+    cols=Math.ceil(W/CW);rws=Math.ceil(H/LH);
+    kois=Array.from({length:5},(_,i)=>({x:R(0,W),y:R(0,H),a:R(0,6.28),turn:R(-.01,.01),sp:R(.5,.9),trail:[],col:i%2?'217,119,94':'212,150,120'}));
+    lotus=Array.from({length:6},()=>({x:R(0,W),y:R(0,H),r:R(16,26),ph:R(0,6),flower:Math.random()<.6}));
+  }
+  function drawKoi(k){
+    k.turn+=R(-.002,.002);k.turn=Math.max(-.02,Math.min(.02,k.turn));k.a+=k.turn;
+    k.x+=Math.cos(k.a)*k.sp;k.y+=Math.sin(k.a)*k.sp;
+    if(k.x<-60||k.x>W+60||k.y<-60||k.y>H+60){k.a=Math.atan2(H/2-k.y,W/2-k.x)+R(-.5,.5);k.trail=[]}
+    k.trail.unshift([k.x,k.y]);if(k.trail.length>80)k.trail.pop();
+    BODY.forEach((c,n)=>{
+      const p=k.trail[n*8];if(!p)return;
+      const sway=Math.sin(t*3-n*.7)*(n*.9),nx=-Math.sin(k.a),ny=Math.cos(k.a);
+      ctx.fillStyle='rgba('+k.col+','+(.7-n*.05).toFixed(2)+')';
+      ctx.font=(FS+4-n)+'px ui-monospace,Menlo,Consolas,monospace';
+      ctx.fillText(c,p[0]+nx*sway,p[1]+ny*sway)
+    })
+  }
+  function frame(){
+    ctx.clearRect(0,0,W,H);ctx.textBaseline='middle';ctx.textAlign='center';
+    ctx.font=FS+'px ui-monospace,Menlo,Consolas,monospace';
+    ripples=ripples.filter(r=>t-r.t0<6);
+    for(let y=0;y<rws;y++){
+      for(let x=0;x<cols;x+=2){
+        let v=Math.sin(x*.09+t*.5+Math.sin(y*.12+t*.25)*2)+Math.sin(y*.18-t*.4+x*.04)*.8;
+        for(const r of ripples){const d=Math.hypot((x-r.x)*.55,y-r.y),a=t-r.t0;v+=Math.sin(d*.9-a*5)*Math.exp(-a*.7-d*.05)*2.2}
+        v=(v+2.6)/5.2;const c=CH[Math.max(0,Math.min(CH.length-1,Math.floor(v*CH.length)))];
+        if(c!==' '){ctx.fillStyle='rgba(60,135,125,'+(.1+v*.22).toFixed(2)+')';ctx.fillText(c,x*CW,y*LH)}
+      }
+    }
+    ctx.font=FS+'px ui-monospace,Menlo,Consolas,monospace';
+    for(const l of lotus){
+      const x=l.x+Math.sin(t*.2+l.ph)*6,y=l.y+Math.cos(t*.17+l.ph)*4;
+      ctx.fillStyle='rgba(110,170,120,.42)';
+      for(let i=0;i<16;i++){if(i===0||i===1)continue;const a=i/16*6.28;ctx.fillText('o',x+Math.cos(a)*l.r,y+Math.sin(a)*l.r*.8)}
+      if(l.flower){ctx.fillStyle='rgba(214,128,165,.85)';ctx.fillText('@',x,y);for(let i=0;i<6;i++){const a=i/6*6.28+t*.05;ctx.fillText('*',x+Math.cos(a)*9,y+Math.sin(a)*8)}}
+    }
+    kois.forEach(drawKoi);
+    t+=reduce?0:.016;
+    if(!reduce)requestAnimationFrame(frame)
+  }
+  addEventListener('pointermove',e=>{if(reduce)return;const last=ripples.at(-1);
+    if(last&&t-last.t0<.25)return;ripples.push({x:e.clientX/CW,y:e.clientY/LH,t0:t})});
+  addEventListener('resize',()=>{size();if(reduce)frame()});
+  size();frame();
+})();
+</script>
+</body>
+</html>
