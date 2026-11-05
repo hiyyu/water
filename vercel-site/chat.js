@@ -3,7 +3,8 @@
   const css = `
 #wq-chat{position:fixed;right:20px;bottom:20px;z-index:60;font:14px/1.5 "Instrument Sans",system-ui,sans-serif;color:#1d4a44}
 #wq-chat *{box-sizing:border-box}
-.wc-fab{width:56px;height:56px;border-radius:50%;border:0;background:#1d4a44;color:#fff;cursor:pointer;display:grid;place-items:center;box-shadow:0 8px 24px rgba(29,74,68,.3);transition:transform .2s}
+.wc-fab{width:64px;height:64px;padding:0;border:0;background:none;cursor:pointer;display:grid;place-items:center;filter:drop-shadow(0 6px 10px rgba(29,74,68,.3));transition:transform .2s}
+.wc-fab img{width:100%;height:100%;object-fit:contain;pointer-events:none}
 .wc-fab:hover{transform:scale(1.06)}
 .wc-fab:focus-visible,#wq-chat button:focus-visible,#wq-chat input:focus-visible{outline:2px solid #c9769b;outline-offset:2px}
 .wc-panel{position:absolute;right:0;bottom:70px;width:min(370px,calc(100vw - 32px));height:min(520px,calc(100vh - 110px));display:flex;flex-direction:column;background:rgba(255,255,255,.96);border:1px solid rgba(29,74,68,.14);border-radius:18px;box-shadow:0 18px 50px rgba(29,74,68,.22);overflow:hidden}
@@ -26,7 +27,7 @@
 
   const root = document.createElement('div'); root.id = 'wq-chat';
   root.innerHTML = `
-<button class="wc-fab" aria-label="Open chat" aria-expanded="false"><svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12a8 8 0 0 1-11.5 7.2L4 20.5l1.4-4.6A8 8 0 1 1 21 12Z"/></svg></button>
+<button class="wc-fab" aria-label="Open chat" aria-expanded="false"><img src="/character.png" alt=""></button>
 <section class="wc-panel" hidden role="dialog" aria-label="Water quality assistant">
 <header><b>Water quality assistant</b><button class="wc-x" aria-label="Close chat">&times;</button></header>
 <div class="wc-log" aria-live="polite"></div><div class="wc-chips"></div>
