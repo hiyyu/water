@@ -28,9 +28,14 @@ module.exports = async (req, res) => {
     });
     const d = await r.json();
     const reply = d && d.choices && d.choices[0] && d.choices[0].message && d.choices[0].message.content;
-    if (!r.ok || !reply) return res.status(502).json({ error: 'The assistant is unavailable right now.' });
+    if (!r.ok || !reply) {
+      console.error('Groq error', r.status, JSON.stringify(d));
+      const why = d && d.error && d.error.message ? d.error.message : 'status ' + r.status;
+      return res.status(502).json({ error: 'Groq: ' + why });
+    }
     return res.status(200).json({ reply });
   } catch (e) {
+    console.error('Chat fetch failed', e);
     return res.status(502).json({ error: 'The assistant is unavailable right now.' });
   }
 };

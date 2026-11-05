@@ -52,10 +52,11 @@
     const node = add('bot', 'Thinking...');
     try {
       const r = await fetch('/api/chat', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ messages: hist }) });
-      const d = await r.json();
-      if (!r.ok || !d.reply) throw new Error(d.error || 'Request failed');
+      const d = await r.json().catch(() => ({}));
+      if (!r.ok || !d.reply) throw new Error('HTTP ' + r.status + ': ' + (d.error || 'no JSON reply (is /api/chat deployed?)'));
       node.textContent = d.reply; hist.push({ role: 'assistant', content: d.reply });
     } catch (e) {
+      console.error('[chat]', e);
       node.textContent = 'Sorry, I could not reply just now. Please try again in a moment.'; hist.pop();
     }
     busy = false; send.disabled = false; log.scrollTop = log.scrollHeight; input.focus();
