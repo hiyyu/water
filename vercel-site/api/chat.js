@@ -10,7 +10,7 @@ Rules: answer in plain text with no markdown, in under 120 words. Do not invent 
 
 module.exports = async (req, res) => {
   if (req.method !== 'POST') return res.status(405).json({ error: 'POST only' });
-  const key = process.env.XAI_API_KEY;
+  const key = process.env.GROQ_API_KEY;
   if (!key) return res.status(500).json({ error: 'The chatbot is not configured yet.' });
 
   const raw = Array.isArray(req.body && req.body.messages) ? req.body.messages : [];
@@ -21,10 +21,10 @@ module.exports = async (req, res) => {
   if (!msgs.length || msgs[msgs.length - 1].role !== 'user') return res.status(400).json({ error: 'Bad request.' });
 
   try {
-    const r = await fetch('https://api.x.ai/v1/chat/completions', {
+    const r = await fetch('https://api.groq.com/openai/v1/chat/completions', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + key },
-      body: JSON.stringify({ model: process.env.XAI_MODEL || 'grok-4.5', messages: [{ role: 'system', content: SYSTEM }, ...msgs] })
+      body: JSON.stringify({ model: process.env.GROQ_MODEL || 'llama-3.3-70b-versatile', messages: [{ role: 'system', content: SYSTEM }, ...msgs] })
     });
     const d = await r.json();
     const reply = d && d.choices && d.choices[0] && d.choices[0].message && d.choices[0].message.content;
