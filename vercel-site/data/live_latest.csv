@@ -1,15 +1,15 @@
 station_id,river,location,state,datetime,wqi,status,lat,lon
-CR19J,Sg. Muar,"Sg. Muar, Johor (Intake Panchor)",Johor,2026-11-13T21:00:00,77,Slightly Polluted,2.206223,102.779166
-CR18J,Sg. Segamat,"Sg. Segamat, Johor (Intake Segamat)",Johor,2026-11-13T21:00:00,83,Clean,2.524026,102.839403
-CR20J,Sg. Semanggar,"Sg. Johor, Johor (Intake Semanggar)",Johor,2026-11-13T21:00:00,82,Clean,1.782228,103.740405
-CR21J,Sg. Skudai,"Sg. Skudai, Johor (Intake Skudai)",Johor,2026-11-13T21:00:00,76,Slightly Polluted,1.585026,103.653858
-CR03K,Sg. Muda,"Sg. Muda, Kedah (Intake Kulim Hi-Tech)",Kedah,2026-11-13T21:00:00,70,Slightly Polluted,5.559954,100.51041
-CR01K,Terusan Mada,"Terusan Mada, Kedah (Intake Arau Fasa IV)",Kedah,2026-11-13T21:00:00,72,Slightly Polluted,6.399936,100.305385
-CR02K,Terusan Mada,"Terusan Mada, Kedah (Intake Bukit Jenun, Kedah)",Kedah,2026-11-13T21:00:00,86,Clean,5.923798,100.503721
+CR19J,Sg. Muar,"Sg. Muar, Johor (Intake Panchor)",Johor,2026-11-14T03:00:00,77,Slightly Polluted,2.206223,102.779166
+CR18J,Sg. Segamat,"Sg. Segamat, Johor (Intake Segamat)",Johor,2026-11-14T03:00:00,85,Clean,2.524026,102.839403
+CR20J,Sg. Semanggar,"Sg. Johor, Johor (Intake Semanggar)",Johor,2026-11-14T03:00:00,84,Clean,1.782228,103.740405
+CR21J,Sg. Skudai,"Sg. Skudai, Johor (Intake Skudai)",Johor,2026-11-14T03:00:00,78,Slightly Polluted,1.585026,103.653858
+CR03K,Sg. Muda,"Sg. Muda, Kedah (Intake Kulim Hi-Tech)",Kedah,2026-11-14T03:00:00,72,Slightly Polluted,5.559954,100.51041
+CR01K,Terusan Mada,"Terusan Mada, Kedah (Intake Arau Fasa IV)",Kedah,2026-11-14T03:00:00,73,Slightly Polluted,6.399936,100.305385
+CR02K,Terusan Mada,"Terusan Mada, Kedah (Intake Bukit Jenun, Kedah)",Kedah,2026-11-14T03:00:00,85,Clean,5.923798,100.503721
 CR26D,Sg. Kelantan,"Sg. Kelantan, Kelantan (Intake Sokor)",Kelantan,2026-11-13T21:00:00,86,Clean,5.610651,102.145023
-CR04P,Sg. Kulim,"Sg. Kulim, P.Pinang (Intake Toh Alang)",P.Pinang,2026-11-13T21:00:00,85,Clean,5.43568,100.511143
-CR10B,Sg. Labu,"Sg. Labu, Selangor (Intake Labu Lanjut)",Selangor,2026-11-13T21:00:00,76,Slightly Polluted,2.787133,101.7507
-CR08B,Sg. Langat,"Sg. Langat, Selangor (Intake Bukit Tampoi)",Selangor,2026-11-13T21:00:00,79,Slightly Polluted,2.854357,101.681122
-CR11B,Sg. Langat,"Sg. Langat, Selangor (Intake Cheras Batu 11)",Selangor,2026-11-13T21:00:00,79,Slightly Polluted,3.061683,101.781822
-CR07B,Sg. Selangor,"Sg. Selangor, Selangor (Intake Sg. Selangor Phasa 1,2,3)",Selangor,2026-11-13T21:00:00,78,Slightly Polluted,3.40732,101.438027
-CR09B,Sg. Semenyih,"Sg. Semenyih, Selangor (Intake Jenderam)",Selangor,2026-11-13T21:00:00,78,Slightly Polluted,2.891571,101.760038
+CR04P,Sg. Kulim,"Sg. Kulim, P.Pinang (Intake Toh Alang)",P.Pinang,2026-11-14T03:00:00,86,Clean,5.43568,100.511143
+CR10B,Sg. Labu,"Sg. Labu, Selangor (Intake Labu Lanjut)",Selangor,2026-11-14T03:00:00,77,Slightly Polluted,2.787133,101.7507
+CR08B,Sg. Langat,"Sg. Langat, Selangor (Intake Bukit Tampoi)",Selangor,2026-11-14T03:00:00,88,Clean,2.854357,101.681122
+CR11B,Sg. Langat,"Sg. Langat, Selangor (Intake Cheras Batu 11)",Selangor,2026-11-14T03:00:00,72,Slightly Polluted,3.061683,101.781822
+CR07B,Sg. Selangor,"Sg. Selangor, Selangor (Intake Sg. Selangor Phasa 1,2,3)",Selangor,2026-11-14T03:00:00,81,Clean,3.40732,101.438027
+CR09B,Sg. Semenyih,"Sg. Semenyih, Selangor (Intake Jenderam)",Selangor,2026-11-14T02:00:00,77,Slightly Polluted,2.891571,101.760038
